@@ -19,17 +19,17 @@ WHERE ir.uninstall_time IS NULL
 ORDER BY c.component_no;
 
 -- 测试1：退役部件不能再次安装。预期：Retired component cannot be installed.
-INSERT INTO InstallationRecord (component_id, aircraft_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id)
-VALUES (6, 1, 'illegal test position', '2025-06-10 09:00:00', NULL, 'illegal installation for retired component', NULL, 1, NULL);
+INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id)
+VALUES (6, 1, 4, 'hydraulic system bay', '2025-06-10 09:00:00', NULL, 'illegal installation for retired component', NULL, 1, NULL);
 
 -- 测试2：已安装部件不能重复安装。预期：Only in_stock or available components can be installed. 或 active installation 报错
-INSERT INTO InstallationRecord (component_id, aircraft_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id)
-VALUES (4, 2, 'navigation bay duplicate test', '2025-06-10 10:00:00', NULL, 'illegal duplicate installation', NULL, 1, NULL);
+INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id)
+VALUES (4, 2, 10, 'navigation bay', '2025-06-10 10:00:00', NULL, 'illegal duplicate installation', NULL, 1, NULL);
 
 -- 测试3：同一飞机同一位置不能同时安装多个部件。预期：Aircraft position already has an active component.
 -- ENG-003 是 in_stock，可安装；但 AC-1001 的 left engine position 已被 ENG-001 占用，若已执行更换测试则被 ENG-002 占用。
-INSERT INTO InstallationRecord (component_id, aircraft_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id)
-VALUES (3, 1, 'left engine position', '2025-06-10 11:00:00', NULL, 'illegal position conflict test', NULL, 1, NULL);
+INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id)
+VALUES (3, 1, 1, 'left engine position', '2025-06-10 11:00:00', NULL, 'illegal position conflict test', NULL, 1, NULL);
 
 -- 测试4：不能直接删除核心业务数据。预期：Component cannot be physically deleted. Use retirement process instead.
 DELETE FROM Component WHERE component_no = 'HYD-002';
@@ -70,14 +70,15 @@ SET aircraft_model = 'B737'
 WHERE aircraft_no = 'AC-1002';
 
 INSERT INTO InstallationRecord (
-    component_id, aircraft_id, install_position, install_time, uninstall_time,
+    component_id, aircraft_id, position_id, install_position, install_time, uninstall_time,
     install_reason, uninstall_reason, operator_id, uninstall_operator_id
 )
 SELECT
-    c.component_id, a.aircraft_id, 'compatibility test position', '2025-06-13 09:00:00', NULL,
+    c.component_id, a.aircraft_id, aip.position_id, aip.position_code, '2025-06-13 09:00:00', NULL,
     'aircraft model compatibility test', NULL, 1, NULL
 FROM Component c
 JOIN Aircraft a ON a.aircraft_no = 'AC-1002'
+JOIN AircraftInstallPosition aip ON aip.aircraft_id = a.aircraft_id AND aip.position_code = 'left engine position'
 WHERE c.component_no = 'ENG-003';
 
 -- 预期错误：Component model is not compatible with the aircraft model.
@@ -167,3 +168,8 @@ SET @delete_protected_audit_id = LAST_INSERT_ID();
 
 DELETE FROM AuditLog
 WHERE audit_id = @delete_protected_audit_id;
+
+-- 测试18：部件类别与安装位置允许类别必须一致。预期：Component category does not match installation position.
+-- LDG-001 是 landing_gear 类，battery bay 只允许 battery 类。
+INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id)
+VALUES (10, 1, 5, 'battery bay', '2025-06-22 09:00:00', NULL, 'category mismatch test', NULL, 1, NULL);

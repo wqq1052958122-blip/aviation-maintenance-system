@@ -53,11 +53,12 @@ def create_component(payload: ComponentCreate, db: Session = Depends(get_db)):
             text(
                 """
                 INSERT INTO Component (
-                    component_no, model_id, batch_no, production_date,
+                    component_no, model_id, batch_no, production_date, stock_in_time,
                     status, total_flight_hours, is_retired
                 )
                 VALUES (
                     :component_no, :model_id, :batch_no, :production_date,
+                    COALESCE(:stock_in_time, CURRENT_TIMESTAMP),
                     'in_stock', 0, FALSE
                 )
                 """

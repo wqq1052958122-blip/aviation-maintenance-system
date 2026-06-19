@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="app-container">
     <div class="header-action">
       <h2>机载部件安装与管理</h2>
@@ -35,20 +35,26 @@
     <el-dialog title="新增部件安装" v-model="installDialogVisible" width="500px">
       <el-form :model="installForm" label-width="120px">
         <el-form-item label="部件编号" required>
-          <el-input v-model="installForm.component_no" placeholder="输入部件编号" />
+          <el-input v-model="installForm.component_no" placeholder="输入部件编号" @change="loadInstallPositions" />
         </el-form-item>
         <el-form-item label="飞机编号" required>
-          <el-input v-model="installForm.aircraft_no" placeholder="输入飞机编号" />
+          <el-input v-model="installForm.aircraft_no" placeholder="输入飞机编号" @change="loadInstallPositions" />
         </el-form-item>
         <el-form-item label="安装位置" required>
-          <el-select v-model="installForm.install_position" placeholder="请选择安装位置" style="width: 100%">
-            <el-option label="左侧发动机" value="left engine position" />
-            <el-option label="右侧发动机" value="right engine position" />
-            <el-option label="导航舱" value="navigation bay" />
-            <el-option label="液压系统舱" value="hydraulic system bay" />
-            <el-option label="主起落架" value="main landing gear" />
-            <el-option label="机头雷达罩" value="nose" />
-            <el-option label="尾翼" value="tail" />
+          <el-select
+            v-model="installForm.install_position"
+            placeholder="请先输入飞机编号和部件编号"
+            style="width: 100%"
+            :disabled="!installForm.aircraft_no || !installForm.component_no"
+            @visible-change="visible => visible && loadInstallPositions(false)"
+          >
+            <el-option
+              v-for="pos in installPositionOptions"
+              :key="pos.position_id"
+              :label="`${pos.position_name}（${translateCategory(pos.allowed_category)}）${pos.is_occupied ? ' - 已占用' : ''}`"
+              :value="pos.position_code"
+              :disabled="Boolean(pos.is_occupied)"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="安装时间" required>
@@ -148,11 +154,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
-import { getActiveInstallations, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
+import { getActiveInstallations, getInstallPositions, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
 import { ElMessage } from 'element-plus'
 import { getOperators } from '../api/operators' // 引入接口
 
 const operatorList = ref([]) // 存下拉框的数据
+const installPositionOptions = ref([])
 
 const translateRole = (role) => ({
   installer: '安装人员',
@@ -160,6 +167,15 @@ const translateRole = (role) => ({
   approver: '审批主管',
   admin: '系统管理员'
 }[role] || role)
+
+const translateCategory = (category) => ({
+  engine: '发动机类',
+  navigation: '导航类',
+  hydraulic: '液压类',
+  battery: '电池类',
+  avionics: '航电类',
+  landing_gear: '起落架类'
+}[category] || category)
 
 const getDefaultOperatorId = (role) => {
   return operatorList.value.find(op => op.role === role)?.operator_id || null
@@ -231,6 +247,18 @@ const fetchData = async () => {
   loading.value = false
 }
 
+const loadInstallPositions = async (resetSelected = true) => {
+  if (resetSelected) installForm.value.install_position = ''
+  installPositionOptions.value = []
+  if (!installForm.value.aircraft_no || !installForm.value.component_no) return
+  try {
+    installPositionOptions.value = await getInstallPositions({
+      aircraft_no: installForm.value.aircraft_no,
+      component_no: installForm.value.component_no
+    })
+  } catch {}
+}
+
 const openInstallDialog = () => {
   const now = new Date()
   installForm.value = {
@@ -241,6 +269,7 @@ const openInstallDialog = () => {
     install_reason: '正常安装',
     operator_id: getDefaultOperatorId('installer')
   }
+  installPositionOptions.value = []
   installDialogVisible.value = true
 }
 

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -33,6 +35,24 @@ def get_aircraft_id(db: Session, aircraft_no: str) -> int:
     return int(value)
 
 
+def get_position_id(db: Session, aircraft_id: int, install_position: str) -> int:
+    value = db.execute(
+        text(
+            """
+            SELECT position_id
+            FROM AircraftInstallPosition
+            WHERE aircraft_id = :aircraft_id
+              AND position_code = :install_position
+              AND is_active = TRUE
+            """
+        ),
+        {"aircraft_id": aircraft_id, "install_position": install_position},
+    ).scalar_one_or_none()
+    if value is None:
+        raise HTTPException(status_code=400, detail="Installation position does not exist for this aircraft.")
+    return int(value)
+
+
 @router.get(
     "/current-installations",
     summary="查询当前安装状态",
@@ -50,6 +70,61 @@ def list_current_installations(db: Session = Depends(get_db)):
     return ok([dict(row) for row in rows])
 
 
+@router.get(
+    "/install-positions",
+    summary="查询飞机安装位置",
+    description=(
+        "查询规范化安装位置。可按 aircraft_no 过滤；传 component_no 时，"
+        "只返回与该部件类别匹配的位置。前端筛选只是辅助，数据库触发器仍会最终校验。"
+    ),
+    response_model=dict,
+    responses=SUCCESS_RESPONSE,
+)
+def list_install_positions(
+    aircraft_no: Optional[str] = Query(default=None),
+    component_no: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    params = {}
+    sql = """
+        SELECT
+            aip.position_id,
+            a.aircraft_no,
+            a.aircraft_model,
+            aip.position_code,
+            aip.position_name,
+            aip.allowed_category,
+            cc.category_name AS allowed_category_name,
+            EXISTS (
+                SELECT 1
+                FROM InstallationRecord ir
+                WHERE ir.position_id = aip.position_id
+                  AND ir.uninstall_time IS NULL
+            ) AS is_occupied
+        FROM AircraftInstallPosition aip
+        JOIN Aircraft a ON aip.aircraft_id = a.aircraft_id
+        JOIN ComponentCategory cc ON aip.allowed_category = cc.category_code
+        WHERE aip.is_active = TRUE
+    """
+    if aircraft_no:
+        sql += " AND a.aircraft_no = :aircraft_no"
+        params["aircraft_no"] = aircraft_no
+    if component_no:
+        get_component_id(db, component_no)
+        sql += """
+            AND aip.allowed_category = (
+                SELECT cm.category
+                FROM Component c
+                JOIN ComponentModel cm ON c.model_id = cm.model_id
+                WHERE c.component_no = :component_no
+            )
+        """
+        params["component_no"] = component_no
+    sql += " ORDER BY a.aircraft_no, aip.position_id"
+    rows = db.execute(text(sql), params).mappings().all()
+    return ok([dict(row) for row in rows])
+
+
 @router.post(
     "/installations",
     summary="安装部件",
@@ -64,17 +139,18 @@ def create_installation(payload: InstallationCreate, db: Session = Depends(get_d
     params = payload.model_dump()
     params["component_id"] = get_component_id(db, payload.component_no)
     params["aircraft_id"] = get_aircraft_id(db, payload.aircraft_no)
+    params["position_id"] = get_position_id(db, params["aircraft_id"], payload.install_position)
 
     try:
         result = db.execute(
             text(
                 """
                 INSERT INTO InstallationRecord (
-                    component_id, aircraft_id, install_position, install_time,
+                    component_id, aircraft_id, position_id, install_position, install_time,
                     install_reason, operator_id
                 )
                 VALUES (
-                    :component_id, :aircraft_id, :install_position, :install_time,
+                    :component_id, :aircraft_id, :position_id, :install_position, :install_time,
                     :install_reason, :operator_id
                 )
                 """

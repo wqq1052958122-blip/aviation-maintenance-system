@@ -25,7 +25,10 @@ SELECT
     cm.category,
     a.aircraft_no,
     a.aircraft_model,
+    ir.position_id,
     ir.install_position,
+    aip.position_name,
+    aip.allowed_category,
     ir.install_time,
     c.status AS component_status,
     o.operator_name AS installer
@@ -33,6 +36,7 @@ FROM InstallationRecord ir
 JOIN Component c ON ir.component_id = c.component_id
 JOIN ComponentModel cm ON c.model_id = cm.model_id
 JOIN Aircraft a ON ir.aircraft_id = a.aircraft_id
+JOIN AircraftInstallPosition aip ON ir.position_id = aip.position_id
 LEFT JOIN Operator o ON ir.operator_id = o.operator_id
 WHERE ir.uninstall_time IS NULL;
 
@@ -44,12 +48,14 @@ SELECT
     cm.category,
     c.batch_no,
     c.production_date,
-    c.created_at AS stock_in_time,
+    c.stock_in_time,
     c.status,
     c.is_retired,
     c.total_flight_hours AS stored_total_flight_hours,
     a.aircraft_no AS current_aircraft_no,
     ir.install_position AS current_install_position,
+    aip.position_name AS current_position_name,
+    aip.allowed_category AS current_position_allowed_category,
     ir.install_time AS current_install_time,
     rr.retirement_time,
     rr.retirement_reason,
@@ -57,12 +63,13 @@ SELECT
 FROM Component c
 JOIN ComponentModel cm ON c.model_id = cm.model_id
 LEFT JOIN InstallationRecord ir ON c.component_id = ir.component_id AND ir.uninstall_time IS NULL
+LEFT JOIN AircraftInstallPosition aip ON ir.position_id = aip.position_id
 LEFT JOIN Aircraft a ON ir.aircraft_id = a.aircraft_id
 LEFT JOIN RetirementRecord rr ON c.component_id = rr.component_id
 LEFT JOIN Operator approver ON rr.approved_by = approver.operator_id;
 
 CREATE VIEW v_component_lifecycle AS
-SELECT c.component_no, c.created_at AS event_time, 'in_stock' AS event_type,
+SELECT c.component_no, c.stock_in_time AS event_time, 'in_stock' AS event_type,
        CONCAT('Component entered inventory. Model: ', cm.model_code, ', category: ', cm.category, ', batch: ', COALESCE(c.batch_no, 'N/A')) AS event_detail
 FROM Component c JOIN ComponentModel cm ON c.model_id = cm.model_id
 UNION ALL
@@ -222,7 +229,7 @@ WHERE status = 'pending';
 CREATE VIEW v_component_full_timeline AS
 SELECT
     c.component_no,
-    c.created_at AS event_time,
+    c.stock_in_time AS event_time,
     'stock_in' AS event_type,
     'Component entered inventory' AS event_title,
     CONCAT('Model: ', cm.model_code, ', category: ', cm.category, ', batch: ', COALESCE(c.batch_no, 'N/A')) AS event_detail,

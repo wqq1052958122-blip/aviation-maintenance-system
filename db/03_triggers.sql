@@ -81,6 +81,10 @@ BEGIN
     DECLARE v_aircraft_model VARCHAR(50);
     DECLARE v_applicable_aircraft_model VARCHAR(50);
     DECLARE v_installer_count INT DEFAULT 0;
+    DECLARE v_position_count INT DEFAULT 0;
+    DECLARE v_position_code VARCHAR(100);
+    DECLARE v_position_allowed_category VARCHAR(50);
+    DECLARE v_component_category VARCHAR(50);
 
     SELECT COUNT(*) INTO v_installer_count
     FROM Operator
@@ -124,7 +128,8 @@ BEGIN
     FROM Aircraft
     WHERE aircraft_id = NEW.aircraft_id;
 
-    SELECT cm.applicable_aircraft_model INTO v_applicable_aircraft_model
+    SELECT cm.applicable_aircraft_model, cm.category
+    INTO v_applicable_aircraft_model, v_component_category
     FROM Component c
     JOIN ComponentModel cm ON c.model_id = cm.model_id
     WHERE c.component_id = NEW.component_id;
@@ -138,11 +143,32 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retired aircraft cannot accept new installation.';
     END IF;
 
+    SELECT COUNT(*) INTO v_position_count
+    FROM AircraftInstallPosition
+    WHERE position_id = NEW.position_id
+      AND aircraft_id = NEW.aircraft_id
+      AND is_active = TRUE;
+
+    IF v_position_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Installation position does not exist for this aircraft.';
+    END IF;
+
+    SELECT position_code, allowed_category
+    INTO v_position_code, v_position_allowed_category
+    FROM AircraftInstallPosition
+    WHERE position_id = NEW.position_id;
+
+    SET NEW.install_position = v_position_code;
+
+    IF v_component_category <> v_position_allowed_category THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Component category does not match installation position.';
+    END IF;
+
     -- 新增：同一飞机同一安装位置不能同时存在多个有效安装记录
     SELECT COUNT(*) INTO v_position_active_count
     FROM InstallationRecord
     WHERE aircraft_id = NEW.aircraft_id
-      AND install_position = NEW.install_position
+      AND position_id = NEW.position_id
       AND uninstall_time IS NULL;
 
     IF v_position_active_count > 0 THEN
@@ -177,6 +203,9 @@ BEGIN
     END IF;
     IF NOT (OLD.install_position <=> NEW.install_position) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'install_position in installation history cannot be changed.';
+    END IF;
+    IF NOT (OLD.position_id <=> NEW.position_id) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'position_id in installation history cannot be changed.';
     END IF;
     IF NOT (OLD.install_time <=> NEW.install_time) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'install_time in installation history cannot be changed.';

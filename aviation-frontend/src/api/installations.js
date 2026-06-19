@@ -5,6 +5,10 @@ export function getActiveInstallations() {
   return request.get('/current-installations')
 }
 
+export function getInstallPositions(params = {}) {
+  return request.get('/install-positions', { params })
+}
+
 // 安装部件
 export function installComponent(data) {
   return request.post('/installations', data)
