@@ -51,7 +51,7 @@ CREATE TABLE Component (
     batch_no VARCHAR(50) COMMENT '批次号',
     production_date DATE COMMENT '生产日期',
     status VARCHAR(30) NOT NULL DEFAULT 'in_stock' COMMENT '当前状态',
-    total_flight_hours DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '累计飞行小时，准确统计以飞行日志关联视图为准',
+    total_flight_hours DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '历史兼容冗余字段；权威累计飞行小时以 FlightLog 与 InstallationRecord 推导视图为准',
     is_retired BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否退役',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -124,6 +124,9 @@ CREATE TABLE MaintenancePlan (
     CONSTRAINT chk_plan_completed_time CHECK (
         (status = 'pending' AND completed_at IS NULL)
         OR (status IN ('completed', 'cancelled') AND completed_at IS NOT NULL)
+    ),
+    CONSTRAINT chk_plan_completed_after_created CHECK (
+        completed_at IS NULL OR completed_at >= created_at
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='维修计划表';
 

@@ -113,10 +113,36 @@ GROUP BY c.component_no, c.status;
 
 -- 测试6：查询新增统计视图
 SELECT
+    component_no, aircraft_no, flight_count,
+    calculated_total_flight_hours, first_flight_time, last_flight_time
+FROM v_component_flight_usage
+ORDER BY component_no, aircraft_no;
+
+SELECT
     component_no, model_code, category, design_life_hours, used_hours,
     remaining_life_hours, life_usage_ratio, warning_level
 FROM v_component_life_warning
 ORDER BY life_usage_ratio DESC, component_no;
+
+-- 验证寿命预警 used_hours 与 FlightLog + InstallationRecord 推导值一致。
+-- stored_total_flight_hours 仅用于展示历史兼容字段，不参与预警计算。
+SELECT
+    lw.component_no,
+    c.total_flight_hours AS stored_total_flight_hours,
+    COALESCE(fu.derived_used_hours, 0) AS derived_used_hours,
+    lw.used_hours AS warning_used_hours,
+    CASE
+        WHEN lw.used_hours = COALESCE(fu.derived_used_hours, 0) THEN 'matched'
+        ELSE 'mismatched'
+    END AS verification_result
+FROM v_component_life_warning lw
+JOIN Component c ON lw.component_no = c.component_no
+LEFT JOIN (
+    SELECT component_no, SUM(calculated_total_flight_hours) AS derived_used_hours
+    FROM v_component_flight_usage
+    GROUP BY component_no
+) fu ON lw.component_no = fu.component_no
+ORDER BY lw.component_no;
 
 SELECT retirement_reason, retirement_count
 FROM v_retirement_reason_stats
@@ -157,6 +183,35 @@ SET @test_plan_id = LAST_INSERT_ID();
 SELECT *
 FROM v_pending_maintenance_plan
 WHERE plan_id = @test_plan_id;
+
+UPDATE MaintenancePlan
+SET status = 'completed'
+WHERE plan_id = @test_plan_id;
+
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status, created_by
+)
+SELECT
+    component_id,
+    'cancelled plan trace test',
+    '2025-07-02 09:00:00',
+    'verify cancelled plan remains traceable',
+    'pending',
+    2
+FROM Component
+WHERE component_no = 'ENG-003';
+
+SET @cancelled_trace_plan_id = LAST_INSERT_ID();
+
+UPDATE MaintenancePlan
+SET status = 'cancelled'
+WHERE plan_id = @cancelled_trace_plan_id;
+
+-- 预期：completed 与 cancelled 两条计划都仍可在全量视图中查询。
+SELECT *
+FROM v_maintenance_plan_detail
+WHERE plan_id IN (@test_plan_id, @cancelled_trace_plan_id)
+ORDER BY plan_id;
 
 -- 测试9：查询包含计划、安装、维修和退役事件的生命周期总时间轴
 SELECT

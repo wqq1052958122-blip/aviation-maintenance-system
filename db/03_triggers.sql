@@ -24,6 +24,8 @@ DROP TRIGGER IF EXISTS trg_before_delete_installation$$
 DROP TRIGGER IF EXISTS trg_before_delete_maintenance$$
 DROP TRIGGER IF EXISTS trg_before_delete_flight$$
 DROP TRIGGER IF EXISTS trg_before_delete_retirement$$
+DROP TRIGGER IF EXISTS trg_before_delete_maintenance_plan$$
+DROP TRIGGER IF EXISTS trg_before_delete_audit_log$$
 DROP TRIGGER IF EXISTS trg_before_delete_operator$$
 
 CREATE TRIGGER trg_before_update_component_status
@@ -57,6 +59,11 @@ BEGIN
        AND NEW.status IN ('completed', 'cancelled')
        AND NEW.completed_at IS NULL THEN
         SET NEW.completed_at = NOW();
+    END IF;
+
+    IF NEW.completed_at IS NOT NULL
+       AND NEW.completed_at < NEW.created_at THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan completed_at cannot be earlier than created_at.';
     END IF;
 END$$
 
@@ -302,6 +309,10 @@ CREATE TRIGGER trg_before_delete_flight BEFORE DELETE ON FlightLog FOR EACH ROW
 BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Flight log cannot be physically deleted.'; END$$
 CREATE TRIGGER trg_before_delete_retirement BEFORE DELETE ON RetirementRecord FOR EACH ROW
 BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retirement record cannot be physically deleted.'; END$$
+CREATE TRIGGER trg_before_delete_maintenance_plan BEFORE DELETE ON MaintenancePlan FOR EACH ROW
+BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan cannot be physically deleted.'; END$$
+CREATE TRIGGER trg_before_delete_audit_log BEFORE DELETE ON AuditLog FOR EACH ROW
+BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Audit log cannot be physically deleted.'; END$$
 CREATE TRIGGER trg_before_delete_operator BEFORE DELETE ON Operator FOR EACH ROW
 BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Operator record cannot be physically deleted.'; END$$
 

@@ -7,6 +7,7 @@ USE aviation_maintenance;
 
 DROP VIEW IF EXISTS v_component_full_timeline;
 DROP VIEW IF EXISTS v_pending_maintenance_plan;
+DROP VIEW IF EXISTS v_maintenance_plan_detail;
 DROP VIEW IF EXISTS v_audit_log_detail;
 DROP VIEW IF EXISTS v_component_life_warning;
 DROP VIEW IF EXISTS v_retirement_reason_stats;
@@ -98,6 +99,8 @@ FROM RetirementRecord rr
 JOIN Component c ON rr.component_id = c.component_id
 LEFT JOIN Operator o ON rr.approved_by = o.operator_id;
 
+-- 权威飞行小时来源：按安装时间区间关联 FlightLog 实时推导。
+-- Component.total_flight_hours 仅为历史兼容冗余字段，不参与本视图计算。
 CREATE VIEW v_component_flight_usage AS
 SELECT
     c.component_no,
@@ -130,6 +133,8 @@ JOIN Component c ON cm.model_id = c.model_id
 LEFT JOIN MaintenanceRecord mr ON c.component_id = mr.component_id
 GROUP BY cm.model_code, cm.category;
 
+-- 寿命预警只依赖 v_component_flight_usage 的推导值，
+-- 不依赖可能未同步的 Component.total_flight_hours。
 CREATE VIEW v_component_life_warning AS
 SELECT
     c.component_no,
@@ -173,9 +178,10 @@ SELECT
 FROM AuditLog al
 LEFT JOIN Operator o ON al.operator_id = o.operator_id;
 
-CREATE VIEW v_pending_maintenance_plan AS
+CREATE VIEW v_maintenance_plan_detail AS
 SELECT
     mp.plan_id,
+    mp.component_id,
     c.component_no,
     cm.model_code,
     cm.category,
@@ -184,14 +190,34 @@ SELECT
     mp.planned_reason,
     mp.status,
     mp.created_at,
+    mp.completed_at,
     mp.created_by,
     o.operator_name AS created_by_name,
-    mp.related_maintenance_id
+    mp.related_maintenance_id,
+    mr.maintenance_type AS related_maintenance_type,
+    mr.result AS related_maintenance_result
 FROM MaintenancePlan mp
 JOIN Component c ON mp.component_id = c.component_id
 JOIN ComponentModel cm ON c.model_id = cm.model_id
 LEFT JOIN Operator o ON mp.created_by = o.operator_id
-WHERE mp.status = 'pending';
+LEFT JOIN MaintenanceRecord mr ON mp.related_maintenance_id = mr.maintenance_id;
+
+CREATE VIEW v_pending_maintenance_plan AS
+SELECT
+    plan_id,
+    component_no,
+    model_code,
+    category,
+    planned_type,
+    planned_time,
+    planned_reason,
+    status,
+    created_at,
+    created_by,
+    created_by_name,
+    related_maintenance_id
+FROM v_maintenance_plan_detail
+WHERE status = 'pending';
 
 CREATE VIEW v_component_full_timeline AS
 SELECT
@@ -302,5 +328,6 @@ SELECT * FROM v_model_maintenance_stats ORDER BY maintenance_count DESC;
 SELECT * FROM v_component_life_warning ORDER BY life_usage_ratio DESC, component_no;
 SELECT * FROM v_retirement_reason_stats ORDER BY retirement_count DESC, retirement_reason;
 SELECT * FROM v_audit_log_detail ORDER BY operation_time DESC, audit_id DESC;
+SELECT * FROM v_maintenance_plan_detail ORDER BY created_at DESC, plan_id DESC;
 SELECT * FROM v_pending_maintenance_plan ORDER BY planned_time, plan_id;
 SELECT * FROM v_component_full_timeline ORDER BY component_no, event_time, source_table, source_id;
