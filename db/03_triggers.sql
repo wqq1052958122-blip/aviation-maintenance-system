@@ -7,6 +7,8 @@ USE aviation_maintenance;
 DELIMITER $$
 
 DROP TRIGGER IF EXISTS trg_before_insert_installation$$
+DROP TRIGGER IF EXISTS trg_before_update_component_status$$
+DROP TRIGGER IF EXISTS trg_before_update_maintenance_plan$$
 DROP TRIGGER IF EXISTS trg_after_insert_installation$$
 DROP TRIGGER IF EXISTS trg_before_update_installation$$
 DROP TRIGGER IF EXISTS trg_after_update_installation$$
@@ -22,7 +24,48 @@ DROP TRIGGER IF EXISTS trg_before_delete_installation$$
 DROP TRIGGER IF EXISTS trg_before_delete_maintenance$$
 DROP TRIGGER IF EXISTS trg_before_delete_flight$$
 DROP TRIGGER IF EXISTS trg_before_delete_retirement$$
+DROP TRIGGER IF EXISTS trg_before_delete_maintenance_plan$$
+DROP TRIGGER IF EXISTS trg_before_delete_audit_log$$
 DROP TRIGGER IF EXISTS trg_before_delete_operator$$
+
+CREATE TRIGGER trg_before_update_component_status
+BEFORE UPDATE ON Component
+FOR EACH ROW
+BEGIN
+    DECLARE v_rule_count INT DEFAULT 0;
+
+    IF NOT (OLD.status <=> NEW.status) THEN
+        SELECT COUNT(*) INTO v_rule_count
+        FROM ComponentStatusTransitionRule
+        WHERE from_status = OLD.status
+          AND to_status = NEW.status;
+
+        IF v_rule_count = 0 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Illegal component status transition.';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER trg_before_update_maintenance_plan
+BEFORE UPDATE ON MaintenancePlan
+FOR EACH ROW
+BEGIN
+    IF OLD.status IN ('completed', 'cancelled')
+       AND NOT (OLD.status <=> NEW.status) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Completed or cancelled maintenance plan status cannot be changed.';
+    END IF;
+
+    IF OLD.status = 'pending'
+       AND NEW.status IN ('completed', 'cancelled')
+       AND NEW.completed_at IS NULL THEN
+        SET NEW.completed_at = NOW();
+    END IF;
+
+    IF NEW.completed_at IS NOT NULL
+       AND NEW.completed_at < NEW.created_at THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan completed_at cannot be earlier than created_at.';
+    END IF;
+END$$
 
 CREATE TRIGGER trg_before_insert_installation
 BEFORE INSERT ON InstallationRecord
@@ -266,6 +309,10 @@ CREATE TRIGGER trg_before_delete_flight BEFORE DELETE ON FlightLog FOR EACH ROW
 BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Flight log cannot be physically deleted.'; END$$
 CREATE TRIGGER trg_before_delete_retirement BEFORE DELETE ON RetirementRecord FOR EACH ROW
 BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retirement record cannot be physically deleted.'; END$$
+CREATE TRIGGER trg_before_delete_maintenance_plan BEFORE DELETE ON MaintenancePlan FOR EACH ROW
+BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan cannot be physically deleted.'; END$$
+CREATE TRIGGER trg_before_delete_audit_log BEFORE DELETE ON AuditLog FOR EACH ROW
+BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Audit log cannot be physically deleted.'; END$$
 CREATE TRIGGER trg_before_delete_operator BEFORE DELETE ON Operator FOR EACH ROW
 BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Operator record cannot be physically deleted.'; END$$
 

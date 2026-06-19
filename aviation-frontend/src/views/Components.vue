@@ -65,22 +65,36 @@
           </template>
         </el-table>
 
-        <h3>历史轨迹</h3>
-        <el-timeline style="margin-top: 15px;">
+        <h3>完整生命周期时间轴</h3>
+        <el-alert
+          v-if="fullTimelineLoadFailed"
+          title="完整时间轴未加载"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <el-timeline v-else-if="fullTimelineData.length" style="margin-top: 15px;">
           <el-timeline-item
-  v-for="(event, index) in lifecycleData"
-  :key="index"
-  :timestamp="formatTime(event.event_time)"
-  :type="getTimelineType(event.event_type)"
-  placement="top"
->
-  <el-card shadow="hover">
-    <h4>{{ translateEventType(event.event_type) }}</h4>
-    <p>{{ event.event_detail }}</p>
-  </el-card>
-</el-timeline-item>
-          <el-empty v-if="lifecycleData.length === 0" description="暂无历史记录" />
+            v-for="event in fullTimelineData"
+            :key="`${event.source_table}-${event.source_id}-${event.event_type}`"
+            :timestamp="formatTime(event.event_time)"
+            :type="getTimelineType(event.event_type)"
+            placement="top"
+          >
+            <el-card shadow="hover">
+              <div class="timeline-title-row">
+                <el-tag :type="getTimelineType(event.event_type)" size="small">
+                  {{ formatLifecycleEventType(event.event_type) }}
+                </el-tag>
+                <strong>{{ formatLifecycleTitle(event.event_title, event.event_type) }}</strong>
+              </div>
+              <p>{{ formatLifecycleDetail(event.event_detail, event.event_type) }}</p>
+            </el-card>
+          </el-timeline-item>
         </el-timeline>
+        <el-empty v-else description="暂无生命周期事件" />
+
       </div>
     </el-drawer>
 
@@ -128,8 +142,13 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getComponents, createComponent, getComponentProfile, getComponentLifecycle, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
+import { getComponents, createComponent, getComponentProfile, getComponentFullTimeline, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
 import { ElMessage } from 'element-plus'
+import {
+  formatLifecycleDetail,
+  formatLifecycleEventType,
+  formatLifecycleTitle
+} from '../utils/businessFormatters'
 
 // 2. 定义变量
 const componentList = ref([])
@@ -170,31 +189,41 @@ const drawerVisible = ref(false)
 const drawerLoading = ref(false)
 const currentComponentNo = ref('')
 const profileData = ref({})
-const lifecycleData = ref([])
+const fullTimelineData = ref([])
+const fullTimelineLoadFailed = ref(false)
 const flightUsageData = ref([])
 
 const openProfileDrawer = async (component_no) => {
   currentComponentNo.value = component_no
   drawerVisible.value = true
   drawerLoading.value = true
-  
+  profileData.value = {}
+  fullTimelineData.value = []
+  flightUsageData.value = []
+  fullTimelineLoadFailed.value = false
+
   try {
-    const [profileRes, lifecycleRes, flightUsageRes] = await Promise.all([
+    const [profileResult, flightUsageResult, fullTimelineResult] = await Promise.allSettled([
       getComponentProfile(component_no),
-      getComponentLifecycle(component_no),
-      getComponentFlightUsage(component_no)
+      getComponentFlightUsage(component_no),
+      getComponentFullTimeline(component_no)
     ])
-    
-    // 1. 档案数据提取
-    profileData.value = profileRes.data || profileRes || {}
-    
-    // 2. 【关键修正】：这里 lifecycleRes 本身是一个对象 { component_no: '...', timeline: [...] }
-    // 你需要取它的 .timeline 属性！
-    const rawLifecycle = lifecycleRes.data || lifecycleRes;
-    lifecycleData.value = rawLifecycle.timeline || []; // 从 timeline 字段取数组
-    flightUsageData.value = flightUsageRes.data || flightUsageRes || []
-    
-  } catch {} finally {
+
+    if (profileResult.status === 'fulfilled') {
+      profileData.value = profileResult.value?.data || profileResult.value || {}
+    }
+    if (flightUsageResult.status === 'fulfilled') {
+      flightUsageData.value = flightUsageResult.value?.data || flightUsageResult.value || []
+    }
+    if (fullTimelineResult.status === 'fulfilled') {
+      const rawTimeline = fullTimelineResult.value?.data || fullTimelineResult.value || {}
+      fullTimelineData.value = [...(rawTimeline.timeline || [])].sort(
+        (a, b) => new Date(a.event_time) - new Date(b.event_time)
+      )
+    } else {
+      fullTimelineLoadFailed.value = true
+    }
+  } finally {
     drawerLoading.value = false
   }
 }
@@ -206,9 +235,26 @@ const getTimelineType = (eventType) => {
     'INSTALL': 'primary',
     'UNINSTALL': 'warning',
     'MAINTENANCE': 'success',
-    'RETIRE': 'danger'
+    'RETIRE': 'danger',
+    created: 'info',
+    stock_in: 'info',
+    in_stock: 'info',
+    installed: 'primary',
+    installation: 'primary',
+    uninstalled: 'warning',
+    uninstallation: 'warning',
+    removed: 'warning',
+    maintenance_started: 'primary',
+    maintenance_start: 'primary',
+    maintenance_completed: 'success',
+    maintenance_complete: 'success',
+    maintenance_end: 'success',
+    retired: 'danger',
+    retirement: 'danger',
+    maintenance_plan_created: 'info',
+    maintenance_plan_completed: 'success',
+    maintenance_plan_cancelled: 'warning'
   }
-  // 如果数据库的事件类型名字不一样，它会默认返回灰色
   return map[eventType] || ''
 }
 
@@ -268,28 +314,6 @@ const formatTime = (timeStr) => {
   return timeStr.replace('T', ' ').substring(0, 16);
 }
 
-// 事件类型翻译
-const translateEventType = (type) => {
-  const map = {
-    'STOCK_IN': '入库登记',
-    'INSTALL': '安装上机',
-    'UNINSTALL': '下机拆卸',
-    'MAINTENANCE': '维修维护',
-    'RETIRE': '报废退役',
-    'installed': '安装上机',
-    'removed': '下机拆卸',
-    'maintenance_start': '维修开始',
-    'maintenance_end': '维修结束',
-    'in_stock': '入库登记',
-    'left engine position': '左侧发动机',
-  'right engine position': '右侧发动机',
-  'navigation bay': '导航舱',
-  'main landing gear': '主起落架',
-  'nose': '机头雷达罩',
-  'tail': '尾翼'
-  }
-  return map[type] || type;
-}
 </script>
 
 <style scoped>
@@ -302,6 +326,12 @@ const translateEventType = (type) => {
   margin: 0;
   color: #606266;
   font-size: 13px;
+}
+.timeline-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 .header-action {
   display: flex;

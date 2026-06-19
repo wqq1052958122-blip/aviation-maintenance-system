@@ -117,6 +117,32 @@ def get_component_lifecycle(component_no: str, db: Session = Depends(get_db)):
 
 
 @router.get(
+    "/components/{component_no}/full-timeline",
+    summary="查询部件完整生命周期时间轴",
+    description=(
+        "查询视图 v_component_full_timeline，按时间升序返回入库、安装、拆卸、"
+        "维修、退役及维修计划事件，不影响原 lifecycle 接口。"
+    ),
+    response_model=dict,
+    responses=SUCCESS_RESPONSE,
+)
+def get_component_full_timeline(component_no: str, db: Session = Depends(get_db)):
+    get_component_id(db, component_no)
+    rows = db.execute(
+        text(
+            """
+            SELECT *
+            FROM v_component_full_timeline
+            WHERE component_no = :component_no
+            ORDER BY event_time ASC
+            """
+        ),
+        {"component_no": component_no},
+    ).mappings().all()
+    return ok({"component_no": component_no, "timeline": [dict(row) for row in rows]})
+
+
+@router.get(
     "/components/{component_no}/flight-usage",
     summary="查询部件飞行使用统计",
     description=(

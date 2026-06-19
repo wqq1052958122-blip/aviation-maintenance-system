@@ -22,3 +22,23 @@ export function completeMaintenance(maintenance_id, data) {
 export function getAllMaintenances() {
   return request.get('/maintenances')
 }
+
+// 查询待执行维修计划
+export function getMaintenancePlans() {
+  return request.get('/maintenance-plans')
+}
+
+// 创建维修计划
+export function createMaintenancePlan(data) {
+  return request.post('/maintenance-plans', data)
+}
+
+// 完成维修计划
+export function completeMaintenancePlan(plan_id, data = {}) {
+  return request.post(`/maintenance-plans/${plan_id}/complete`, data)
+}
+
+// 取消维修计划
+export function cancelMaintenancePlan(plan_id, data = {}) {
+  return request.post(`/maintenance-plans/${plan_id}/cancel`, data)
+}

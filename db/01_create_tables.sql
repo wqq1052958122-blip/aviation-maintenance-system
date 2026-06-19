@@ -1,7 +1,7 @@
 -- =====================================================
 -- 项目1：航空部件生命周期与维修管理系统
 -- 文件：01_create_tables.sql
--- 作用：建库 + 建 8 张核心表 + 基础约束
+-- 作用：建库 + 建 11 张核心表 + 基础约束
 -- 数据库：MySQL 8.0
 -- 增强点：统一字符集；InstallationRecord 增加拆卸责任人；保留历史时间区间
 -- =====================================================
@@ -51,7 +51,7 @@ CREATE TABLE Component (
     batch_no VARCHAR(50) COMMENT '批次号',
     production_date DATE COMMENT '生产日期',
     status VARCHAR(30) NOT NULL DEFAULT 'in_stock' COMMENT '当前状态',
-    total_flight_hours DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '累计飞行小时，准确统计以飞行日志关联视图为准',
+    total_flight_hours DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '历史兼容冗余字段；权威累计飞行小时以 FlightLog 与 InstallationRecord 推导视图为准',
     is_retired BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否退役',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -60,6 +60,13 @@ CREATE TABLE Component (
     CONSTRAINT chk_total_flight_hours CHECK (total_flight_hours >= 0),
     CONSTRAINT chk_retired_status_consistency CHECK ((status = 'retired' AND is_retired = TRUE) OR (status <> 'retired' AND is_retired = FALSE))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='部件实例表';
+
+CREATE TABLE ComponentStatusTransitionRule (
+    from_status VARCHAR(30) NOT NULL COMMENT '原状态',
+    to_status VARCHAR(30) NOT NULL COMMENT '目标状态',
+    description VARCHAR(255) COMMENT '流转说明',
+    PRIMARY KEY (from_status, to_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='部件状态合法流转规则表';
 
 CREATE TABLE InstallationRecord (
     installation_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '安装记录ID',
@@ -99,6 +106,30 @@ CREATE TABLE MaintenanceRecord (
     CONSTRAINT chk_pending_end_time CHECK ((result = 'pending' AND end_time IS NULL) OR (result <> 'pending' AND end_time IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='维修记录表';
 
+CREATE TABLE MaintenancePlan (
+    plan_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '维修计划ID',
+    component_id INT NOT NULL COMMENT '部件ID',
+    planned_type VARCHAR(50) NOT NULL COMMENT '计划维修类型',
+    planned_time DATETIME NOT NULL COMMENT '计划维修时间',
+    planned_reason TEXT COMMENT '计划原因',
+    status VARCHAR(30) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/completed/cancelled',
+    created_by INT NULL COMMENT '创建人ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    completed_at DATETIME NULL COMMENT '完成或取消时间',
+    related_maintenance_id INT NULL COMMENT '关联维修记录ID',
+    CONSTRAINT fk_plan_component FOREIGN KEY (component_id) REFERENCES Component(component_id),
+    CONSTRAINT fk_plan_creator FOREIGN KEY (created_by) REFERENCES Operator(operator_id),
+    CONSTRAINT fk_plan_maintenance FOREIGN KEY (related_maintenance_id) REFERENCES MaintenanceRecord(maintenance_id),
+    CONSTRAINT chk_plan_status CHECK (status IN ('pending', 'completed', 'cancelled')),
+    CONSTRAINT chk_plan_completed_time CHECK (
+        (status = 'pending' AND completed_at IS NULL)
+        OR (status IN ('completed', 'cancelled') AND completed_at IS NOT NULL)
+    ),
+    CONSTRAINT chk_plan_completed_after_created CHECK (
+        completed_at IS NULL OR completed_at >= created_at
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='维修计划表';
+
 CREATE TABLE FlightLog (
     flight_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '飞行记录ID',
     aircraft_id INT NOT NULL COMMENT '飞机ID',
@@ -126,5 +157,16 @@ CREATE TABLE RetirementRecord (
     CONSTRAINT fk_retirement_component FOREIGN KEY (component_id) REFERENCES Component(component_id),
     CONSTRAINT fk_retirement_operator FOREIGN KEY (approved_by) REFERENCES Operator(operator_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='退役记录表';
+
+CREATE TABLE AuditLog (
+    audit_id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '审计日志ID',
+    operator_id INT NULL COMMENT '操作人员ID',
+    operation_type VARCHAR(50) NOT NULL COMMENT '操作类型',
+    target_table VARCHAR(64) NOT NULL COMMENT '目标表',
+    target_id INT NULL COMMENT '目标记录ID',
+    operation_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+    operation_detail TEXT COMMENT '操作详情',
+    CONSTRAINT fk_audit_operator FOREIGN KEY (operator_id) REFERENCES Operator(operator_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='业务操作审计日志表';
 
 SHOW TABLES;

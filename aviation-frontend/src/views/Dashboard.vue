@@ -48,6 +48,36 @@
       </el-row>
     </el-card>
 
+    <el-card class="dashboard-section audit-card" shadow="never">
+      <template #header>
+        <span>最近关键操作</span>
+      </template>
+      <el-alert
+        v-if="auditLoadFailed"
+        title="审计日志未加载"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
+      <el-table v-else-if="recentAuditLogs.length" :data="recentAuditLogs" size="small" style="width: 100%">
+        <el-table-column label="操作时间" min-width="150">
+          <template #default="scope">{{ formatTime(scope.row.operation_time) }}</template>
+        </el-table-column>
+        <el-table-column label="操作类型" min-width="120">
+          <template #default="scope">
+            <el-tag size="small" type="info">{{ formatAuditOperationType(scope.row.operation_type) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作人员" min-width="110">
+          <template #default="scope">{{ scope.row.operator_name || '系统/未记录' }}</template>
+        </el-table-column>
+        <el-table-column label="操作详情" min-width="320" show-overflow-tooltip>
+          <template #default="scope">{{ formatAuditDetail(scope.row.operation_detail) }}</template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-else description="暂无审计日志" :image-size="70" />
+    </el-card>
+
     <el-card class="dashboard-section" shadow="never">
       <template #header>
         <span>部件寿命预警</span>
@@ -96,6 +126,12 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import * as echarts from 'echarts'
+import { getRecentAuditLogs } from '../api/auditLogs'
+import {
+  formatAuditDetail,
+  formatAuditOperationType,
+  formatRetirementReason
+} from '../utils/businessFormatters'
 import {
   getComponentLifeWarning,
   getDashboardStats,
@@ -110,6 +146,8 @@ const summaryData = ref({
   maintenanceCount: 0
 })
 const lifeWarningData = ref([])
+const recentAuditLogs = ref([])
+const auditLoadFailed = ref(false)
 const integrityLoaded = ref(false)
 const integrityChecks = ref({
   retired_status_inconsistent_count: 0,
@@ -154,18 +192,21 @@ const initRetirementChart = (rows) => {
   retirementChart ||= echarts.init(retirementChartRef.value)
   retirementChart.setOption({
     title: { text: '退役原因统计', left: 'center' },
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, type: 'scroll' },
+    tooltip: {
+      trigger: 'item',
+      formatter: params => `${params.marker}${params.name}：${params.value} 个（${params.percent}%）`
+    },
+    legend: { bottom: 0, type: 'scroll', formatter: name => name },
     series: [{
       name: '退役数量',
       type: 'pie',
       radius: ['35%', '65%'],
       center: ['50%', '48%'],
       data: rows.map(item => ({
-        name: item.retirement_reason || '未填写原因',
+        name: formatRetirementReason(item.retirement_reason),
         value: Number(item.retirement_count) || 0
       })),
-      label: { formatter: '{b}: {c}' }
+      label: { formatter: '{b}：{c} 个' }
     }]
   }, true)
 }
@@ -200,6 +241,17 @@ const fetchIntegrityChecks = async () => {
   integrityLoaded.value = true
 }
 
+const fetchRecentAuditLogs = async () => {
+  auditLoadFailed.value = false
+  try {
+    const rows = await getRecentAuditLogs()
+    recentAuditLogs.value = (Array.isArray(rows) ? rows : []).slice(0, 5)
+  } catch {
+    recentAuditLogs.value = []
+    auditLoadFailed.value = true
+  }
+}
+
 const getIntegrityCount = (key) => Number(integrityChecks.value[key]) || 0
 const formatHours = (value) => Number(value || 0).toFixed(2)
 const toPercentage = (ratio) => Math.min(100, Math.max(0, Number((Number(ratio || 0) * 100).toFixed(1))))
@@ -222,6 +274,8 @@ const getWarningColor = (level) => ({
   critical: '#F56C6C'
 }[level] || '#909399')
 
+const formatTime = (value) => value ? String(value).replace('T', ' ').slice(0, 19) : '-'
+
 const handleResize = () => {
   maintenanceChart?.resize()
   retirementChart?.resize()
@@ -233,7 +287,8 @@ onMounted(() => {
     fetchMaintenanceStats(),
     fetchLifeWarnings(),
     fetchRetirementReasons(),
-    fetchIntegrityChecks()
+    fetchIntegrityChecks(),
+    fetchRecentAuditLogs()
   ])
   window.addEventListener('resize', handleResize)
 })
@@ -289,5 +344,8 @@ onUnmounted(() => {
 .chart {
   width: 100%;
   height: 400px;
+}
+.audit-card :deep(.el-card__body) {
+  padding-top: 10px;
 }
 </style>
