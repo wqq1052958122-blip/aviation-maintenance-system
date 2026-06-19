@@ -177,7 +177,7 @@
         <el-form-item label="负责人员" required>
           <el-select v-model="createForm.technician_id" placeholder="请选择维修人员" style="width: 100%">
             <el-option
-              v-for="op in operatorList.filter(o => o.role === 'technician' || o.role === 'admin')"
+              v-for="op in operatorList.filter(o => o.role === 'technician')"
               :key="op.operator_id"
               :label="op.operator_name + '（' + translateRole(op.role) + '）'"
               :value="op.operator_id"
@@ -222,7 +222,7 @@
         <el-form-item label="审批人员" required>
           <el-select v-model="completeForm.approved_by" placeholder="请选择验收审批人" style="width: 100%">
             <el-option
-              v-for="op in operatorList.filter(o => o.role === 'approver' || o.role === 'admin')"
+              v-for="op in operatorList.filter(o => o.role === 'approver')"
               :key="op.operator_id"
               :label="op.operator_name + '（' + translateRole(op.role) + '）'"
               :value="op.operator_id"
@@ -284,6 +284,10 @@ const translateRole = (role) => ({
   approver: '审批主管',
   admin: '系统管理员'
 }[role] || role)
+
+const getDefaultOperatorId = (role) => {
+  return operatorList.value.find(op => op.role === role)?.operator_id || null
+}
 
 // 新增：加载所有维修单大盘
 const fetchAllList = async () => {
@@ -411,13 +415,14 @@ const openCreateDialog = () => {
     maintenance_type: 'routine',
     start_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
     description: '',
-    technician_id: 1 // 模拟当前操作的维修人员ID
+    technician_id: getDefaultOperatorId('technician')
   }
   createVisible.value = true
 }
 
 const submitCreate = async () => {
   if (!createForm.value.component_no) return ElMessage.error('部件编号必填')
+  if (!createForm.value.technician_id) return ElMessage.error('请选择维修技师')
   try {
     await createMaintenance(createForm.value)
     ElMessage.success('工单创建成功！')
@@ -439,7 +444,7 @@ const openCompleteDialog = (row) => {
     end_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
     result: 'passed',
     description: '',
-    approved_by: 1, // 模拟审批人ID
+    approved_by: getDefaultOperatorId('approver'),
     retirement_reason: ''
   }
   completeVisible.value = true
@@ -449,6 +454,7 @@ const submitComplete = async () => {
   if (completeForm.value.result === 'scrapped' && !completeForm.value.retirement_reason) {
     return ElMessage.error('选择报废时必须填写退役原因！')
   }
+  if (!completeForm.value.approved_by) return ElMessage.error('请选择审批主管')
   try {
     await completeMaintenance(completeForm.value.maintenance_id, completeForm.value)
     ElMessage.success('维修结果提报成功！部件状态已同步流转。')

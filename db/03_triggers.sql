@@ -80,6 +80,16 @@ BEGIN
     DECLARE v_aircraft_status VARCHAR(30);
     DECLARE v_aircraft_model VARCHAR(50);
     DECLARE v_applicable_aircraft_model VARCHAR(50);
+    DECLARE v_installer_count INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_installer_count
+    FROM Operator
+    WHERE operator_id = NEW.operator_id
+      AND role = 'installer';
+
+    IF v_installer_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only installer can perform installation';
+    END IF;
 
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_id = NEW.component_id;
     IF v_component_count = 0 THEN
@@ -157,6 +167,8 @@ CREATE TRIGGER trg_before_update_installation
 BEFORE UPDATE ON InstallationRecord
 FOR EACH ROW
 BEGIN
+    DECLARE v_uninstaller_count INT DEFAULT 0;
+
     IF NOT (OLD.component_id <=> NEW.component_id) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'component_id in installation history cannot be changed.';
     END IF;
@@ -171,6 +183,17 @@ BEGIN
     END IF;
     IF NOT (OLD.operator_id <=> NEW.operator_id) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'install operator in installation history cannot be changed.';
+    END IF;
+
+    IF OLD.uninstall_time IS NULL AND NEW.uninstall_time IS NOT NULL THEN
+        SELECT COUNT(*) INTO v_uninstaller_count
+        FROM Operator
+        WHERE operator_id = NEW.uninstall_operator_id
+          AND role = 'installer';
+
+        IF v_uninstaller_count = 0 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only installer can perform uninstallation';
+        END IF;
     END IF;
 
     IF OLD.uninstall_time IS NOT NULL THEN
@@ -204,6 +227,16 @@ BEGIN
     DECLARE v_component_status VARCHAR(30);
     DECLARE v_is_retired BOOLEAN;
     DECLARE v_pending_maintenance_count INT DEFAULT 0;
+    DECLARE v_technician_count INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_technician_count
+    FROM Operator
+    WHERE operator_id = NEW.technician_id
+      AND role = 'technician';
+
+    IF v_technician_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only technician can perform maintenance';
+    END IF;
 
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_id = NEW.component_id;
     IF v_component_count = 0 THEN
@@ -214,6 +247,10 @@ BEGIN
 
     IF v_component_status = 'retired' OR v_is_retired = TRUE THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retired component cannot be maintained.';
+    END IF;
+
+    IF v_component_status = 'installed' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Installed component must be uninstalled before maintenance';
     END IF;
 
     SELECT COUNT(*) INTO v_pending_maintenance_count
@@ -268,6 +305,16 @@ BEGIN
     DECLARE v_current_install_count INT DEFAULT 0;
     DECLARE v_component_status VARCHAR(30);
     DECLARE v_is_retired BOOLEAN;
+    DECLARE v_approver_count INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_approver_count
+    FROM Operator
+    WHERE operator_id = NEW.approved_by
+      AND role = 'approver';
+
+    IF v_approver_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only approver can approve retirement';
+    END IF;
 
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_id = NEW.component_id;
     IF v_component_count = 0 THEN

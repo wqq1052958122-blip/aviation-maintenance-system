@@ -245,9 +245,13 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'maintenance end_time cannot be earlier than start_time.';
     END IF;
 
-    IF p_result = 'scrapped' THEN
-        SELECT COUNT(*) INTO v_operator_count FROM Operator WHERE operator_id = p_approved_by;
-        IF v_operator_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Approver does not exist.'; END IF;
+    SELECT COUNT(*) INTO v_operator_count
+    FROM Operator
+    WHERE operator_id = p_approved_by
+      AND role = 'approver';
+
+    IF v_operator_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only approver can approve maintenance completion';
     END IF;
 
     UPDATE MaintenanceRecord

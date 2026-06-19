@@ -127,6 +127,16 @@
         <el-form-item label="退役原因" required>
           <el-input v-model="retireForm.retirement_reason" type="textarea" placeholder="请填写退役原因，如：达到设计寿命、无法修复等" />
         </el-form-item>
+        <el-form-item label="审批人员" required>
+          <el-select v-model="retireForm.approved_by" placeholder="请选择退役审批人" style="width: 100%">
+            <el-option
+              v-for="op in operatorList.filter(o => o.role === 'approver')"
+              :key="op.operator_id"
+              :label="op.operator_name + '（' + translateRole(op.role) + '）'"
+              :value="op.operator_id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="备注说明">
           <el-input v-model="retireForm.remark" type="textarea" />
         </el-form-item>
@@ -143,6 +153,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getComponents, createComponent, getComponentProfile, getComponentFullTimeline, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
+import { getOperators } from '../api/operators'
 import { ElMessage } from 'element-plus'
 import {
   formatLifecycleDetail,
@@ -153,6 +164,7 @@ import {
 // 2. 定义变量
 const componentList = ref([])
 const modelList = ref([]) // 用于存放型号数据
+const operatorList = ref([])
 const loading = ref(false)
 const modelLoading = ref(false)
 
@@ -172,7 +184,26 @@ const fetchModels = async () => {
 onMounted(() => {
   fetchList()    // 原有的部件实例获取
   fetchModels()  // 新增的型号字典获取
+  fetchOperators()
 })
+
+const fetchOperators = async () => {
+  try {
+    const res = await getOperators()
+    operatorList.value = res.data || res || []
+  } catch {}
+}
+
+const translateRole = (role) => ({
+  installer: '安装人员',
+  technician: '维修技师',
+  approver: '审批主管',
+  admin: '系统管理员'
+}[role] || role)
+
+const getDefaultOperatorId = (role) => {
+  return operatorList.value.find(op => op.role === role)?.operator_id || null
+}
 
 const fetchList = async () => {
   loading.value = true
@@ -292,7 +323,7 @@ const openRetireDialog = (row) => {
   retireForm.value = {
     retirement_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
     retirement_reason: '',
-    approved_by: 1, // 模拟审批人ID
+    approved_by: getDefaultOperatorId('approver'),
     remark: ''
   }
   retireVisible.value = true
@@ -300,6 +331,7 @@ const openRetireDialog = (row) => {
 
 const submitRetire = async () => {
   if (!retireForm.value.retirement_reason) return ElMessage.warning('退役原因必填')
+  if (!retireForm.value.approved_by) return ElMessage.warning('请选择退役审批人')
   try {
     await retireComponent(retireTarget.value, retireForm.value)
     ElMessage.success('退役处理成功')

@@ -65,9 +65,9 @@
         <el-form-item label="操作人员" required>
   <el-select v-model="installForm.operator_id" placeholder="请选择操作人" style="width: 100%">
     <el-option 
-      v-for="op in operatorList.filter(o => o.role === 'installer' || o.role === 'admin')" 
+      v-for="op in operatorList.filter(o => o.role === 'installer')" 
       :key="op.operator_id" 
-      :label="op.operator_name" 
+      :label="op.operator_name + '（' + translateRole(op.role) + '）'" 
       :value="op.operator_id" 
     />
   </el-select>
@@ -95,8 +95,15 @@
         <el-form-item label="拆卸原因" required>
           <el-input v-model="uninstallForm.uninstall_reason" type="textarea" />
         </el-form-item>
-        <el-form-item label="操作员ID">
-          <el-input v-model.number="uninstallForm.uninstall_operator_id" type="number" />
+        <el-form-item label="操作人员" required>
+          <el-select v-model="uninstallForm.uninstall_operator_id" placeholder="请选择拆卸人员" style="width: 100%">
+            <el-option
+              v-for="op in operatorList.filter(o => o.role === 'installer')"
+              :key="op.operator_id"
+              :label="op.operator_name + '（' + translateRole(op.role) + '）'"
+              :value="op.operator_id"
+            />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -119,6 +126,16 @@
         <el-form-item label="安装原因">
           <el-input v-model="replaceForm.install_reason" type="textarea" />
         </el-form-item>
+        <el-form-item label="操作人员" required>
+          <el-select v-model="replaceForm.operator_id" placeholder="请选择更换操作人员" style="width: 100%">
+            <el-option
+              v-for="op in operatorList.filter(o => o.role === 'installer')"
+              :key="op.operator_id"
+              :label="op.operator_name + '（' + translateRole(op.role) + '）'"
+              :value="op.operator_id"
+            />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="replaceDialogVisible = false">取消</el-button>
@@ -136,6 +153,17 @@ import { ElMessage } from 'element-plus'
 import { getOperators } from '../api/operators' // 引入接口
 
 const operatorList = ref([]) // 存下拉框的数据
+
+const translateRole = (role) => ({
+  installer: '安装人员',
+  technician: '维修技师',
+  approver: '审批主管',
+  admin: '系统管理员'
+}[role] || role)
+
+const getDefaultOperatorId = (role) => {
+  return operatorList.value.find(op => op.role === role)?.operator_id || null
+}
 
 // 在 onMounted 里调用它：
 onMounted(async () => {
@@ -181,7 +209,7 @@ const installForm = ref({
   install_position: '',
   install_time: '',
   install_reason: '',
-  operator_id: 1
+  operator_id: null
 })
 
 const uninstallDialogVisible = ref(false)
@@ -191,7 +219,7 @@ const uninstallForm = ref({
   aircraft_no: '',
   uninstall_time: '',
   uninstall_reason: '',
-  uninstall_operator_id: 1
+  uninstall_operator_id: null
 })
 
 const replaceDialogVisible = ref(false)
@@ -211,7 +239,7 @@ const openInstallDialog = () => {
     install_position: '',
     install_time: formatDateTime(now),
     install_reason: '正常安装',
-    operator_id: 1
+    operator_id: getDefaultOperatorId('installer')
   }
   installDialogVisible.value = true
 }
@@ -219,6 +247,10 @@ const openInstallDialog = () => {
 const handleInstall = async () => {
   if (!installForm.value.component_no || !installForm.value.aircraft_no || !installForm.value.install_position || !installForm.value.install_time) {
     ElMessage.warning('请填写必填项')
+    return
+  }
+  if (!installForm.value.operator_id) {
+    ElMessage.warning('请选择安装人员')
     return
   }
   try {
@@ -237,7 +269,7 @@ const openUninstallDialog = (row) => {
     aircraft_no: row.aircraft_no,
     uninstall_time: formatDateTime(now),
     uninstall_reason: '',
-    uninstall_operator_id: 1
+    uninstall_operator_id: getDefaultOperatorId('installer')
   }
   uninstallDialogVisible.value = true
 }
@@ -245,6 +277,10 @@ const openUninstallDialog = (row) => {
 const handleUninstall = async () => {
   if (!uninstallForm.value.uninstall_time || !uninstallForm.value.uninstall_reason) {
     ElMessage.warning('请填写拆卸时间和原因')
+    return
+  }
+  if (!uninstallForm.value.uninstall_operator_id) {
+    ElMessage.warning('请选择拆卸人员')
     return
   }
   try {
@@ -267,7 +303,7 @@ const openReplaceDialog = (row) => {
     new_component_no: '',
     install_position: row.install_position,
     replace_time: formatDateTime(now),
-    operator_id: 1,
+    operator_id: getDefaultOperatorId('installer'),
     install_reason: '常规更换',
     uninstall_reason: '部件磨损更换'
   }
@@ -275,6 +311,10 @@ const openReplaceDialog = (row) => {
 }
 
 const handleReplace = async () => {
+  if (!replaceForm.value.new_component_no || !replaceForm.value.operator_id) {
+    ElMessage.warning('请填写新部件编号并选择更换操作人员')
+    return
+  }
   try {
     await replaceComponent(replaceForm.value);
     ElMessage.success('更换成功！');
