@@ -20,6 +20,11 @@ export function getComponentLifecycle(component_no) {
   return request.get(`/components/${component_no}/lifecycle`)
 }
 
+// 获取部件完整生命周期时间轴
+export function getComponentFullTimeline(component_no) {
+  return request.get(`/components/${component_no}/full-timeline`)
+}
+
 // 获取部件飞行使用统计
 export function getComponentFlightUsage(component_no) {
   return request.get(`/components/${component_no}/flight-usage`)
