@@ -5,6 +5,8 @@
 -- =====================================================
 USE aviation_maintenance;
 
+DROP VIEW IF EXISTS v_component_life_warning;
+DROP VIEW IF EXISTS v_retirement_reason_stats;
 DROP VIEW IF EXISTS v_current_installation;
 DROP VIEW IF EXISTS v_component_profile;
 DROP VIEW IF EXISTS v_component_lifecycle;
@@ -125,6 +127,35 @@ JOIN Component c ON cm.model_id = c.model_id
 LEFT JOIN MaintenanceRecord mr ON c.component_id = mr.component_id
 GROUP BY cm.model_code, cm.category;
 
+CREATE VIEW v_component_life_warning AS
+SELECT
+    c.component_no,
+    cm.model_code,
+    cm.category,
+    cm.design_life_hours,
+    COALESCE(usage_stats.used_hours, 0) AS used_hours,
+    ROUND(GREATEST(cm.design_life_hours - COALESCE(usage_stats.used_hours, 0), 0), 2) AS remaining_life_hours,
+    ROUND(COALESCE(usage_stats.used_hours, 0) / cm.design_life_hours, 4) AS life_usage_ratio,
+    CASE
+        WHEN COALESCE(usage_stats.used_hours, 0) / cm.design_life_hours >= 0.9 THEN 'critical'
+        WHEN COALESCE(usage_stats.used_hours, 0) / cm.design_life_hours >= 0.7 THEN 'warning'
+        ELSE 'normal'
+    END AS warning_level
+FROM Component c
+JOIN ComponentModel cm ON c.model_id = cm.model_id
+LEFT JOIN (
+    SELECT component_no, SUM(calculated_total_flight_hours) AS used_hours
+    FROM v_component_flight_usage
+    GROUP BY component_no
+) usage_stats ON c.component_no = usage_stats.component_no;
+
+CREATE VIEW v_retirement_reason_stats AS
+SELECT
+    retirement_reason,
+    COUNT(*) AS retirement_count
+FROM RetirementRecord
+GROUP BY retirement_reason;
+
 SHOW FULL TABLES WHERE Table_type = 'VIEW';
 
 SELECT * FROM v_current_installation ORDER BY aircraft_no, install_position;
@@ -132,3 +163,5 @@ SELECT * FROM v_component_profile ORDER BY component_no;
 SELECT component_no, event_time, event_type, event_detail FROM v_component_lifecycle WHERE component_no IN ('HYD-001', 'ENG-001') ORDER BY component_no, event_time;
 SELECT * FROM v_component_flight_usage WHERE component_no IN ('ENG-001', 'ENG-002', 'HYD-001') ORDER BY component_no, aircraft_no;
 SELECT * FROM v_model_maintenance_stats ORDER BY maintenance_count DESC;
+SELECT * FROM v_component_life_warning ORDER BY life_usage_ratio DESC, component_no;
+SELECT * FROM v_retirement_reason_stats ORDER BY retirement_count DESC, retirement_reason;

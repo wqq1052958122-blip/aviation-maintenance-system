@@ -181,6 +181,7 @@ BEGIN
     DECLARE v_old_result VARCHAR(30);
     DECLARE v_end_time DATETIME;
     DECLARE v_operator_count INT DEFAULT 0;
+    DECLARE v_active_install_count INT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -221,7 +222,15 @@ BEGIN
     WHERE maintenance_id = p_maintenance_id;
 
     IF p_result = 'passed' THEN
-        UPDATE Component SET status = 'available' WHERE component_id = v_component_id AND is_retired = FALSE;
+        SELECT COUNT(*) INTO v_active_install_count
+        FROM InstallationRecord
+        WHERE component_id = v_component_id
+          AND uninstall_time IS NULL;
+
+        UPDATE Component
+        SET status = IF(v_active_install_count > 0, 'installed', 'available')
+        WHERE component_id = v_component_id
+          AND is_retired = FALSE;
     ELSEIF p_result = 'failed' THEN
         UPDATE Component SET status = 'removed' WHERE component_id = v_component_id AND is_retired = FALSE;
     ELSEIF p_result = 'scrapped' THEN

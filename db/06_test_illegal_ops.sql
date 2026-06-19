@@ -50,3 +50,35 @@ VALUES (1, 'FL-ILLEGAL-001', '2025-06-11 12:00:00', '2025-06-11 10:00:00', 2.00,
 
 -- 测试8：安装中的部件不能直接退役。预期：Installed component must be uninstalled before retirement.
 CALL sp_retire_component('NAV-001', '2025-06-12 10:00:00', 'illegal retirement test', 3, 'this should fail because NAV-001 is still installed');
+
+-- 测试9：status = retired 时 is_retired 必须为 TRUE。预期：chk_retired_status_consistency 约束失败。
+UPDATE Component
+SET status = 'retired', is_retired = FALSE
+WHERE component_no = 'ENG-003';
+
+-- 测试10：is_retired = TRUE 时 status 必须为 retired。预期：chk_retired_status_consistency 约束失败。
+UPDATE Component
+SET status = 'available', is_retired = TRUE
+WHERE component_no = 'ENG-003';
+
+-- 测试11：部件型号与飞机型号不匹配时禁止安装。
+-- 请将以下整段作为一个测试执行；INSERT 预期失败并返回清晰错误，随后单独执行 ROLLBACK。
+START TRANSACTION;
+
+UPDATE Aircraft
+SET aircraft_model = 'B737'
+WHERE aircraft_no = 'AC-1002';
+
+INSERT INTO InstallationRecord (
+    component_id, aircraft_id, install_position, install_time, uninstall_time,
+    install_reason, uninstall_reason, operator_id, uninstall_operator_id
+)
+SELECT
+    c.component_id, a.aircraft_id, 'compatibility test position', '2025-06-13 09:00:00', NULL,
+    'aircraft model compatibility test', NULL, 1, NULL
+FROM Component c
+JOIN Aircraft a ON a.aircraft_no = 'AC-1002'
+WHERE c.component_no = 'ENG-003';
+
+-- 预期错误：Component model is not compatible with the aircraft model.
+ROLLBACK;

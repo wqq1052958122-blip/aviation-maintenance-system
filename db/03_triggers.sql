@@ -35,6 +35,8 @@ BEGIN
     DECLARE v_component_status VARCHAR(30);
     DECLARE v_is_retired BOOLEAN;
     DECLARE v_aircraft_status VARCHAR(30);
+    DECLARE v_aircraft_model VARCHAR(50);
+    DECLARE v_applicable_aircraft_model VARCHAR(50);
 
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_id = NEW.component_id;
     IF v_component_count = 0 THEN
@@ -64,7 +66,21 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft does not exist.';
     END IF;
 
-    SELECT service_status INTO v_aircraft_status FROM Aircraft WHERE aircraft_id = NEW.aircraft_id;
+    SELECT service_status, aircraft_model
+    INTO v_aircraft_status, v_aircraft_model
+    FROM Aircraft
+    WHERE aircraft_id = NEW.aircraft_id;
+
+    SELECT cm.applicable_aircraft_model INTO v_applicable_aircraft_model
+    FROM Component c
+    JOIN ComponentModel cm ON c.model_id = cm.model_id
+    WHERE c.component_id = NEW.component_id;
+
+    IF v_applicable_aircraft_model IS NOT NULL
+       AND TRIM(v_applicable_aircraft_model) <> ''
+       AND v_applicable_aircraft_model <> v_aircraft_model THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Component model is not compatible with the aircraft model.';
+    END IF;
     IF v_aircraft_status = 'retired' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retired aircraft cannot accept new installation.';
     END IF;

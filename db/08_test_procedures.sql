@@ -67,3 +67,57 @@ SELECT c.component_no, c.status, mr.maintenance_id, mr.result, mr.start_time, mr
 FROM Component c
 JOIN MaintenanceRecord mr ON c.component_id = mr.component_id
 WHERE c.component_no = 'NAV-002';
+
+-- 测试5：安装中部件在线检查通过后仍保持 installed
+SET @nav001_id = (
+    SELECT component_id
+    FROM Component
+    WHERE component_no = 'NAV-001'
+);
+
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time, result, description, technician_id
+)
+VALUES (
+    @nav001_id,
+    'online inspection',
+    '2025-06-04 09:00:00',
+    NULL,
+    'pending',
+    'Online inspection for installed-state verification.',
+    2
+);
+
+SET @online_maintenance_id = LAST_INSERT_ID();
+
+CALL sp_complete_maintenance(
+    @online_maintenance_id,
+    '2025-06-04 11:00:00',
+    'passed',
+    'Online inspection passed while component remains installed.',
+    NULL,
+    NULL
+);
+
+-- 预期：NAV-001 的 status 仍为 installed，且仍有有效安装记录。
+SELECT
+    c.component_no,
+    c.status,
+    COUNT(ir.installation_id) AS active_installation_count
+FROM Component c
+LEFT JOIN InstallationRecord ir
+    ON c.component_id = ir.component_id
+   AND ir.uninstall_time IS NULL
+WHERE c.component_no = 'NAV-001'
+GROUP BY c.component_no, c.status;
+
+-- 测试6：查询新增统计视图
+SELECT
+    component_no, model_code, category, design_life_hours, used_hours,
+    remaining_life_hours, life_usage_ratio, warning_level
+FROM v_component_life_warning
+ORDER BY life_usage_ratio DESC, component_no;
+
+SELECT retirement_reason, retirement_count
+FROM v_retirement_reason_stats
+ORDER BY retirement_count DESC, retirement_reason;

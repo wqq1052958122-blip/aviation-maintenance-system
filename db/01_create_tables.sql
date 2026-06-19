@@ -58,7 +58,7 @@ CREATE TABLE Component (
     CONSTRAINT fk_component_model FOREIGN KEY (model_id) REFERENCES ComponentModel(model_id),
     CONSTRAINT chk_component_status CHECK (status IN ('in_stock','installed','removed','under_maintenance','available','retired')),
     CONSTRAINT chk_total_flight_hours CHECK (total_flight_hours >= 0),
-    CONSTRAINT chk_retired_status_consistency CHECK ((is_retired = TRUE AND status = 'retired') OR (is_retired = FALSE))
+    CONSTRAINT chk_retired_status_consistency CHECK ((status = 'retired' AND is_retired = TRUE) OR (status <> 'retired' AND is_retired = FALSE))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='部件实例表';
 
 CREATE TABLE InstallationRecord (
