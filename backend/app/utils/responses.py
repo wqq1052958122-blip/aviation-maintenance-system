@@ -1,0 +1,9 @@
+from fastapi.responses import JSONResponse
+
+
+def ok(data):
+    return {"success": True, "data": data}
+
+
+def fail(message: str, status_code: int = 400):
+    return JSONResponse(status_code=status_code, content={"success": False, "message": message})

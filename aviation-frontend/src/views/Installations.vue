@@ -1,0 +1,420 @@
+<!-- <template>
+  <div class="app-container">
+    <h2>机载部件安装与管理</h2>
+    
+    <el-table :data="installations" border style="width: 100%" v-loading="loading">
+      <el-table-column prop="aircraft_no" label="飞机编号" />
+      <el-table-column prop="install_position" label="安装位置" />
+      <el-table-column prop="component_no" label="当前部件" />
+      <el-table-column prop="component_status" label="状态" />
+      <el-table-column label="操作" width="200">
+        <template #default="scope">
+          <el-button type="warning" size="small" @click="openUninstallDialog(scope.row)">拆卸</el-button>
+          <el-button type="primary" size="small" @click="openReplaceDialog(scope.row)">更换</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <el-dialog title="部件更换" v-model="replaceDialogVisible" width="500px">
+      <el-form :model="replaceForm" label-width="120px">
+        <el-form-item label="当前飞机"> {{ replaceForm.aircraft_no }} </el-form-item>
+        <el-form-item label="旧部件"> {{ replaceForm.old_component_no }} </el-form-item>
+        <el-form-item label="新部件编号" required>
+          <el-input v-model="replaceForm.new_component_no" placeholder="输入待装部件" />
+        </el-form-item>
+        <el-form-item label="拆卸原因" required>
+          <el-input v-model="replaceForm.uninstall_reason" type="textarea" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="replaceDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleReplace">确认执行更换事务</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { getActiveInstallations, replaceComponent } from '../api/installations'
+import { ElMessage } from 'element-plus'
+
+const installations = ref([])
+const loading = ref(false)
+const replaceDialogVisible = ref(false)
+const replaceForm = ref({})
+
+const fetchData = async () => {
+  loading.value = true
+  installations.value = await getActiveInstallations()
+  loading.value = false
+}
+
+const openReplaceDialog = (row) => {
+  replaceForm.value = {
+    aircraft_no: row.aircraft_no,
+    old_component_no: row.component_no,
+    new_component_no: '',
+    install_position: row.install_position,
+    replace_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    operator_id: 1, 
+    // 【关键】：这里必须加上下面这两行，且 key 的名字要和后端 text("CALL ...") 里的参数名完全一致！
+    install_reason: '常规更换', // 给个默认值，或者用 v-model 绑定输入框
+    uninstall_reason: '部件磨损更换' 
+  }
+  replaceDialogVisible.value = true
+}
+
+// 在 Installations.vue 中修改 handleReplace
+const handleReplace = async () => {
+  // 在控制台打印出来看看
+  console.log("最终发送给后端的 payload:", JSON.stringify(replaceForm.value, null, 2));
+  
+  try {
+    await replaceComponent(replaceForm.value);
+    ElMessage.success('更换成功！');
+    replaceDialogVisible.value = false;
+    fetchData();
+  } catch (err) {
+    // 报错信息由 request.js 拦截并处理
+    console.error("更换失败详情:", err);
+  }
+}
+
+// 假设 scope.row.installation_id 是从后端获取的 ID
+const handleUninstall = async (row) => {
+  try {
+    await uninstallComponent(row.installation_id, {
+      uninstall_time: new Date().toISOString(),
+      uninstall_reason: "正常拆卸",
+      uninstall_operator_id: 1
+    })
+    ElMessage.success("拆卸成功")
+    fetchData()
+  } catch (err) {
+    // 自动捕获 400 错误并弹窗
+  }
+}
+
+onMounted(fetchData)
+</script> -->
+
+<template>
+  <div class="app-container">
+    <div class="header-action">
+      <h2>机载部件安装与管理</h2>
+      <el-button type="primary" @click="openInstallDialog">
+        <el-icon><Plus /></el-icon> 新增安装
+      </el-button>
+    </div>
+    
+    <el-table :data="installations" border style="width: 100%" v-loading="loading">
+      <el-table-column prop="aircraft_no" label="飞机编号" />
+      <el-table-column prop="install_position" label="安装位置">
+  <template #default="scope">
+    {{ translatePosition(scope.row.install_position) }}
+  </template>
+</el-table-column>
+      <el-table-column prop="component_no" label="当前部件" />
+      <el-table-column prop="component_status" label="部件状态" />
+      <el-table-column prop="install_time" label="安装时间" width="180" />
+      <el-table-column label="操作" width="220" fixed="right">
+        <template #default="scope">
+          <el-button type="warning" size="small" @click="openUninstallDialog(scope.row)">拆卸</el-button>
+          <el-button type="primary" size="small" @click="openReplaceDialog(scope.row)">更换</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <!-- 新增安装弹窗 -->
+    <el-dialog title="新增部件安装" v-model="installDialogVisible" width="500px">
+      <el-form :model="installForm" label-width="120px">
+        <el-form-item label="部件编号" required>
+          <el-input v-model="installForm.component_no" placeholder="输入部件编号" />
+        </el-form-item>
+        <el-form-item label="飞机编号" required>
+          <el-input v-model="installForm.aircraft_no" placeholder="输入飞机编号" />
+        </el-form-item>
+        <el-form-item label="安装位置" required>
+          <el-select v-model="installForm.install_position" placeholder="请选择安装位置" style="width: 100%">
+            <el-option label="左侧发动机" value="left engine position" />
+            <el-option label="右侧发动机" value="right engine position" />
+            <el-option label="导航舱" value="navigation bay" />
+            <el-option label="液压系统舱" value="hydraulic system bay" />
+            <el-option label="主起落架" value="main landing gear" />
+            <el-option label="机头雷达罩" value="nose" />
+            <el-option label="尾翼" value="tail" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="安装时间" required>
+          <el-date-picker 
+            v-model="installForm.install_time" 
+            type="datetime" 
+            value-format="YYYY-MM-DD HH:mm:ss" 
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="安装原因">
+          <el-input v-model="installForm.install_reason" type="textarea" />
+        </el-form-item>
+        <el-form-item label="操作人员" required>
+  <el-select v-model="installForm.operator_id" placeholder="请选择操作人" style="width: 100%">
+    <el-option 
+      v-for="op in operatorList.filter(o => o.role === 'installer' || o.role === 'admin')" 
+      :key="op.operator_id" 
+      :label="op.operator_name" 
+      :value="op.operator_id" 
+    />
+  </el-select>
+</el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="installDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleInstall">确认安装</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 拆卸弹窗 -->
+    <el-dialog title="部件拆卸" v-model="uninstallDialogVisible" width="500px">
+      <el-form :model="uninstallForm" label-width="120px">
+        <el-form-item label="当前部件"> {{ uninstallForm.component_no }} </el-form-item>
+        <el-form-item label="所属飞机"> {{ uninstallForm.aircraft_no }} </el-form-item>
+        <el-form-item label="拆卸时间" required>
+          <el-date-picker 
+            v-model="uninstallForm.uninstall_time" 
+            type="datetime" 
+            value-format="YYYY-MM-DD HH:mm:ss" 
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="拆卸原因" required>
+          <el-input v-model="uninstallForm.uninstall_reason" type="textarea" />
+        </el-form-item>
+        <el-form-item label="操作员ID">
+          <el-input v-model.number="uninstallForm.uninstall_operator_id" type="number" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="uninstallDialogVisible = false">取消</el-button>
+        <el-button type="warning" @click="handleUninstall">确认拆卸</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 更换弹窗 -->
+    <el-dialog title="部件更换" v-model="replaceDialogVisible" width="500px">
+      <el-form :model="replaceForm" label-width="120px">
+        <el-form-item label="当前飞机"> {{ replaceForm.aircraft_no }} </el-form-item>
+        <el-form-item label="旧部件"> {{ replaceForm.old_component_no }} </el-form-item>
+        <el-form-item label="新部件编号" required>
+          <el-input v-model="replaceForm.new_component_no" placeholder="输入待装部件" />
+        </el-form-item>
+        <el-form-item label="拆卸原因" required>
+          <el-input v-model="replaceForm.uninstall_reason" type="textarea" />
+        </el-form-item>
+        <el-form-item label="安装原因">
+          <el-input v-model="replaceForm.install_reason" type="textarea" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="replaceDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleReplace">确认执行更换事务</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { Plus } from '@element-plus/icons-vue'
+import { getActiveInstallations, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
+import { ElMessage } from 'element-plus'
+import { getOperators } from '../api/operators' // 引入接口
+
+const operatorList = ref([]) // 存下拉框的数据
+
+// 在 onMounted 里调用它：
+onMounted(async () => {
+  fetchData() // 之前的加载列表
+  // 顺便把系统所有人员查出来
+  const res = await getOperators()
+  operatorList.value = res.data || res || []
+})
+
+// 翻译安装位置（用于表格展示）
+const translatePosition = (pos) => {
+  const map = {
+    'left engine position': '左侧发动机',
+    'right engine position': '右侧发动机',
+    'navigation bay': '导航舱',
+    'hydraulic system bay': '液压系统舱',
+    'main landing gear': '主起落架',
+    'nose': '机头雷达罩',
+    'tail': '尾翼'
+  }
+  return map[pos] || pos;
+}
+
+// 翻译后端的英文报错（用于捕获异常弹窗）
+const translateErrorMsg = (msg) => {
+  if (!msg) return '操作失败，发生未知错误'
+  
+  const map = {
+    'Component does not exist': '部件不存在，请检查部件编号',
+    'Retired component cannot be installed': '该部件已退役，严禁再次安装！',
+    'Only in_stock or available components can be installed': '只有“在库”或“可用”状态的部件才能安装',
+    'Component already has an active installation record': '该部件当前已被安装在飞机上，请先拆卸！',
+    'Aircraft does not exist': '填写的飞机编号不存在',
+    'Retired aircraft cannot accept new installation': '这架飞机已退役，无法安装新部件',
+    'Aircraft position already has an active component': '冲突！该飞机的这个位置上已经安装了部件，请先拆卸旧部件',
+    'Old component does not exist': '需要替换的旧部件不存在'
+  }
+
+  for (const [enKey, cnValue] of Object.entries(map)) {
+    if (msg.includes(enKey)) {
+      return cnValue
+    }
+  }
+  
+  return msg
+}
+
+const installations = ref([])
+const loading = ref(false)
+
+const installDialogVisible = ref(false)
+const installForm = ref({
+  component_no: '',
+  aircraft_no: '',
+  install_position: '',
+  install_time: '',
+  install_reason: '',
+  operator_id: 1
+})
+
+const uninstallDialogVisible = ref(false)
+const uninstallForm = ref({
+  installation_id: null,
+  component_no: '',
+  aircraft_no: '',
+  uninstall_time: '',
+  uninstall_reason: '',
+  uninstall_operator_id: 1
+})
+
+const replaceDialogVisible = ref(false)
+const replaceForm = ref({})
+
+const fetchData = async () => {
+  loading.value = true
+  installations.value = await getActiveInstallations()
+  loading.value = false
+}
+
+const openInstallDialog = () => {
+  const now = new Date()
+  installForm.value = {
+    component_no: '',
+    aircraft_no: '',
+    install_position: '',
+    install_time: formatDateTime(now),
+    install_reason: '正常安装',
+    operator_id: 1
+  }
+  installDialogVisible.value = true
+}
+
+const handleInstall = async () => {
+  if (!installForm.value.component_no || !installForm.value.aircraft_no || !installForm.value.install_position || !installForm.value.install_time) {
+    ElMessage.warning('请填写必填项')
+    return
+  }
+  try {
+    await installComponent(installForm.value)
+    ElMessage.success('安装成功！')
+    installDialogVisible.value = false
+    fetchData()
+  } catch (error) {
+    console.error('安装失败:', error)
+  }
+}
+
+const openUninstallDialog = (row) => {
+  const now = new Date()
+  uninstallForm.value = {
+    installation_id: row.installation_id,
+    component_no: row.component_no,
+    aircraft_no: row.aircraft_no,
+    uninstall_time: formatDateTime(now),
+    uninstall_reason: '',
+    uninstall_operator_id: 1
+  }
+  uninstallDialogVisible.value = true
+}
+
+const handleUninstall = async () => {
+  if (!uninstallForm.value.uninstall_time || !uninstallForm.value.uninstall_reason) {
+    ElMessage.warning('请填写拆卸时间和原因')
+    return
+  }
+  try {
+    await uninstallComponent(uninstallForm.value.installation_id, {
+      uninstall_time: uninstallForm.value.uninstall_time,
+      uninstall_reason: uninstallForm.value.uninstall_reason,
+      uninstall_operator_id: uninstallForm.value.uninstall_operator_id
+    })
+    ElMessage.success('拆卸成功')
+    uninstallDialogVisible.value = false
+    fetchData()
+  } catch (err) {
+    console.error("拆卸失败详情:", err);
+  }
+}
+
+const openReplaceDialog = (row) => {
+  const now = new Date()
+  replaceForm.value = {
+    aircraft_no: row.aircraft_no,
+    old_component_no: row.component_no,
+    new_component_no: '',
+    install_position: row.install_position,
+    replace_time: formatDateTime(now),
+    operator_id: 1,
+    install_reason: '常规更换',
+    uninstall_reason: '部件磨损更换'
+  }
+  replaceDialogVisible.value = true
+}
+
+const handleReplace = async () => {
+  console.log("最终发送给后端的 payload:", JSON.stringify(replaceForm.value, null, 2));
+  try {
+    await replaceComponent(replaceForm.value);
+    ElMessage.success('更换成功！');
+    replaceDialogVisible.value = false;
+    fetchData();
+  } catch (err) {
+    console.error("更换失败详情:", err);
+  }
+}
+
+const formatDateTime = (date) => {
+  return date.getFullYear() + '-' + 
+    String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+    String(date.getDate()).padStart(2, '0') + ' ' + 
+    String(date.getHours()).padStart(2, '0') + ':' + 
+    String(date.getMinutes()).padStart(2, '0') + ':' + 
+    String(date.getSeconds()).padStart(2, '0')
+}
+
+onMounted(fetchData)
+</script>
+
+<style scoped>
+.header-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+</style>
+
