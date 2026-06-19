@@ -3,7 +3,7 @@
     <div class="header-action">
       <h2>航空维修人员名册</h2>
       <el-button type="primary" @click="createVisible = true">
-        <el-icon><Plus /></el-icon> 录入新员工
+        <el-icon><Plus /></el-icon> 新增员工
       </el-button>
     </div>
 
@@ -29,17 +29,17 @@
 </el-table-column>
     </el-table>
 
-    <el-dialog title="录入新员工" v-model="createVisible" width="400px">
+    <el-dialog title="新增员工" v-model="createVisible" width="400px">
       <el-form :model="form" label-width="80px">
         <el-form-item label="姓名" required>
           <el-input v-model="form.operator_name" placeholder="如：张三" />
         </el-form-item>
         <el-form-item label="角色" required>
           <el-select v-model="form.role" style="width: 100%">
-            <el-option label="安装专员 (Installer)" value="installer" />
-            <el-option label="维修技师 (Technician)" value="technician" />
-            <el-option label="审批主管 (Approver)" value="approver" />
-            <el-option label="系统管理员 (Admin)" value="admin" />
+            <el-option label="安装专员" value="installer" />
+            <el-option label="维修技师" value="technician" />
+            <el-option label="审批主管" value="approver" />
+            <el-option label="系统管理员" value="admin" />
           </el-select>
         </el-form-item>
         <el-form-item label="电话">
@@ -48,7 +48,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitCreate">确认录入</el-button>
+        <el-button type="primary" @click="submitCreate">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -69,9 +69,7 @@ const fetchList = async () => {
   try {
     const res = await getOperators()
     operatorList.value = res.data || res || []
-  } catch (e) {
-    console.error(e)
-  } finally {
+  } catch {} finally {
     loading.value = false
   }
 }
@@ -80,13 +78,11 @@ const submitCreate = async () => {
   if (!form.value.operator_name) return ElMessage.warning('姓名不能为空')
   try {
     await createOperator(form.value)
-    ElMessage.success('新员工录入成功！')
+    ElMessage.success('员工新增成功')
     createVisible.value = false
     form.value = { operator_name: '', role: 'installer', phone: '' }
     fetchList()
-  } catch (e) {
-    ElMessage.error('录入失败')
-  }
+  } catch {}
 }
 
 onMounted(fetchList)

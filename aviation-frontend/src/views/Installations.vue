@@ -15,7 +15,13 @@
   </template>
 </el-table-column>
       <el-table-column prop="component_no" label="当前部件" />
-      <el-table-column prop="component_status" label="部件状态" />
+      <el-table-column label="部件状态">
+        <template #default="scope">
+          <el-tag :type="getComponentStatusType(scope.row.component_status)">
+            {{ translateComponentStatus(scope.row.component_status) }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="install_time" label="安装时间" width="180" />
       <el-table-column label="操作" width="220" fixed="right">
         <template #default="scope">
@@ -116,7 +122,7 @@
       </el-form>
       <template #footer>
         <el-button @click="replaceDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleReplace">确认执行更换事务</el-button>
+        <el-button type="primary" @click="handleReplace">确认更换</el-button>
       </template>
     </el-dialog>
   </div>
@@ -139,6 +145,18 @@ onMounted(async () => {
   operatorList.value = res.data || res || []
 })
 
+const componentStatusMap = {
+  in_stock: { label: '在库', type: 'info' },
+  available: { label: '可用', type: 'success' },
+  installed: { label: '已安装', type: 'primary' },
+  removed: { label: '已拆卸', type: 'warning' },
+  under_maintenance: { label: '维修中', type: 'warning' },
+  retired: { label: '已退役', type: 'danger' }
+}
+
+const translateComponentStatus = (status) => componentStatusMap[status]?.label || status
+const getComponentStatusType = (status) => componentStatusMap[status]?.type || 'info'
+
 // 翻译安装位置（用于表格展示）
 const translatePosition = (pos) => {
   const map = {
@@ -151,30 +169,6 @@ const translatePosition = (pos) => {
     'tail': '尾翼'
   }
   return map[pos] || pos;
-}
-
-// 翻译后端的英文报错（用于捕获异常弹窗）
-const translateErrorMsg = (msg) => {
-  if (!msg) return '操作失败，发生未知错误'
-  
-  const map = {
-    'Component does not exist': '部件不存在，请检查部件编号',
-    'Retired component cannot be installed': '该部件已退役，严禁再次安装！',
-    'Only in_stock or available components can be installed': '只有“在库”或“可用”状态的部件才能安装',
-    'Component already has an active installation record': '该部件当前已被安装在飞机上，请先拆卸！',
-    'Aircraft does not exist': '填写的飞机编号不存在',
-    'Retired aircraft cannot accept new installation': '这架飞机已退役，无法安装新部件',
-    'Aircraft position already has an active component': '冲突！该飞机的这个位置上已经安装了部件，请先拆卸旧部件',
-    'Old component does not exist': '需要替换的旧部件不存在'
-  }
-
-  for (const [enKey, cnValue] of Object.entries(map)) {
-    if (msg.includes(enKey)) {
-      return cnValue
-    }
-  }
-  
-  return msg
 }
 
 const installations = ref([])
@@ -232,9 +226,7 @@ const handleInstall = async () => {
     ElMessage.success('安装成功！')
     installDialogVisible.value = false
     fetchData()
-  } catch (error) {
-    console.error('安装失败:', error)
-  }
+  } catch {}
 }
 
 const openUninstallDialog = (row) => {
@@ -264,9 +256,7 @@ const handleUninstall = async () => {
     ElMessage.success('拆卸成功')
     uninstallDialogVisible.value = false
     fetchData()
-  } catch (err) {
-    console.error("拆卸失败详情:", err);
-  }
+  } catch {}
 }
 
 const openReplaceDialog = (row) => {
@@ -290,9 +280,7 @@ const handleReplace = async () => {
     ElMessage.success('更换成功！');
     replaceDialogVisible.value = false;
     fetchData();
-  } catch (err) {
-    console.error("更换失败详情:", err);
-  }
+  } catch {}
 }
 
 const formatDateTime = (date) => {
@@ -304,7 +292,6 @@ const formatDateTime = (date) => {
     String(date.getSeconds()).padStart(2, '0')
 }
 
-onMounted(fetchData)
 </script>
 
 <style scoped>

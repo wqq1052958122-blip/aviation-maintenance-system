@@ -3,7 +3,7 @@
     <div class="header-action">
       <h2>机队管理</h2>
       <el-button type="primary" @click="createVisible = true">
-        <el-icon><Plus /></el-icon> 录入新飞机
+        <el-icon><Plus /></el-icon> 新增飞机
       </el-button>
     </div>
 
@@ -43,14 +43,14 @@
                 size="small" type="danger" 
                 v-if="ac.service_status !== 'retired'" 
                 @click="changeStatus(ac.aircraft_no, 'retired')">
-                退役处理
+                退役
              </el-button>
           </div>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-dialog title="✈️ 录入新飞机入列" v-model="createVisible" width="450px">
+    <el-dialog title="新增飞机" v-model="createVisible" width="450px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item label="飞机编号" required>
           <el-input v-model="createForm.aircraft_no" placeholder="如 AC-1008" />
@@ -64,7 +64,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitCreate">确认入列</el-button>
+        <el-button type="primary" @click="submitCreate">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -92,28 +92,24 @@ const fetchList = async () => {
   try {
     const res = await getAircrafts()
     aircraftList.value = res.data || res || []
-  } catch (error) {
-    console.error(error)
-  } finally {
+  } catch {} finally {
     loading.value = false
   }
 }
 
-// 录入新机
+// 新增飞机
 const submitCreate = async () => {
   if (!createForm.value.aircraft_no || !createForm.value.aircraft_model) {
     return ElMessage.warning('请完整填写飞机编号和机型！')
   }
   try {
     await createAircraft(createForm.value)
-    ElMessage.success('新飞机录入成功！')
+    ElMessage.success('飞机新增成功')
     createVisible.value = false
     // 清空表单
     createForm.value.aircraft_no = ''
     fetchList()
-  } catch (error) {
-    const msg = error.response?.data?.detail || error.message || '录入失败'
-    ElMessage.error(msg)
+  } catch {
   }
 }
 
@@ -129,18 +125,17 @@ const changeStatus = (aircraft_no, newStatus) => {
       await updateAircraftStatus(aircraft_no, newStatus)
       ElMessage.success('状态更新成功')
       fetchList()
-    } catch (error) {
-      ElMessage.error('状态更新失败')
+    } catch {
     }
   }).catch(() => {})
 }
 
-// === 翻译官助手 ===
+// 飞机状态显示
 const translateStatus = (status) => {
   const map = {
-    'active': '在役飞行中',
-    'maintenance': '入库定检中',
-    'retired': '永久退役'
+    'active': '服役中',
+    'maintenance': '维修中',
+    'retired': '已退役'
   }
   return map[status] || status
 }

@@ -131,7 +131,7 @@ const initMaintenanceChart = (rows) => {
   if (!maintenanceChartRef.value) return
   maintenanceChart ||= echarts.init(maintenanceChartRef.value)
   maintenanceChart.setOption({
-    title: { text: '各部件型号维修次数统计 (Top)', left: 'center' },
+    title: { text: '各部件型号维修次数统计', left: 'center' },
     tooltip: { trigger: 'axis' },
     xAxis: {
       type: 'category',

@@ -2,7 +2,7 @@
   <div class="app-container">
     <div class="header-action">
       <h2>零部件库存与生命周期管理</h2>
-      <el-button type="primary" @click="openCreateDialog">登记新部件入库</el-button>
+      <el-button type="primary" @click="openCreateDialog">新增部件</el-button>
     </div>
 
     <el-table :data="componentList" border style="width: 100%" v-loading="loading">
@@ -17,7 +17,7 @@
           <el-tag v-if="scope.row.status === 'in_stock'" type="info">在库</el-tag>
           <el-tag v-else-if="scope.row.status === 'available'" type="success">可用</el-tag>
           <el-tag v-else-if="scope.row.status === 'installed'" type="primary">已安装</el-tag>
-          <el-tag v-else-if="scope.row.status === 'removed'" type="warning">已拆卸/待修</el-tag>
+          <el-tag v-else-if="scope.row.status === 'removed'" type="warning">已拆卸</el-tag>
           <el-tag v-else-if="scope.row.status === 'under_maintenance'" type="warning">维修中</el-tag>
           <el-tag v-else-if="scope.row.status === 'retired'" type="danger">已退役</el-tag>
           <el-tag v-else>{{ scope.row.status }}</el-tag>
@@ -27,7 +27,7 @@
       <el-table-column label="操作" width="220">
         <template #default="scope">
           <el-button type="info" size="small" @click="openProfileDrawer(scope.row.component_no)">
-            生命周期溯源
+            查看生命周期
           </el-button>
           <el-button 
             v-if="!scope.row.is_retired && scope.row.status !== 'installed'" 
@@ -65,7 +65,7 @@
           </template>
         </el-table>
 
-        <h3>历史轨迹 (Timeline)</h3>
+        <h3>历史轨迹</h3>
         <el-timeline style="margin-top: 15px;">
           <el-timeline-item
   v-for="(event, index) in lifecycleData"
@@ -84,7 +84,7 @@
       </div>
     </el-drawer>
 
-    <el-dialog title="新部件入库登记" v-model="createVisible" width="500px">
+    <el-dialog title="新增部件" v-model="createVisible" width="500px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item label="部件编号" required>
           <el-input v-model="createForm.component_no" placeholder="如 ENG-004" />
@@ -101,7 +101,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitCreate">确认入库</el-button>
+        <el-button type="primary" @click="submitCreate">提交</el-button>
       </template>
     </el-dialog>
 
@@ -144,10 +144,7 @@ const fetchModels = async () => {
     const res = await getComponentModels()
     // 根据实际情况取 data，有些后端直接返回数组
     modelList.value = res.data || res || []
-  } catch (error) {
-    console.error("获取型号字典失败:", error)
-    ElMessage.error('型号字典加载失败')
-  } finally {
+  } catch {} finally {
     modelLoading.value = false
   }
 }
@@ -163,14 +160,12 @@ const fetchList = async () => {
   try {
     const res = await getComponents()
     componentList.value = res.data || res || []
-  } catch (error) {
-    console.error(error)
-  } finally {
+  } catch {} finally {
     loading.value = false
   }
 }
 
-// --- 生命周期溯源逻辑 (抽屉) ---
+// --- 查看生命周期逻辑 (抽屉) ---
 const drawerVisible = ref(false)
 const drawerLoading = ref(false)
 const currentComponentNo = ref('')
@@ -199,11 +194,7 @@ const openProfileDrawer = async (component_no) => {
     lifecycleData.value = rawLifecycle.timeline || []; // 从 timeline 字段取数组
     flightUsageData.value = flightUsageRes.data || flightUsageRes || []
     
-  } catch (error) {
-    console.error(error)
-    const errorDetail = error.response?.data?.detail || error.message || String(error)
-ElMessage.error(translateErrorMsg(errorDetail))
-  } finally {
+  } catch {} finally {
     drawerLoading.value = false
   }
 }
@@ -242,9 +233,7 @@ const submitCreate = async () => {
     ElMessage.success('新部件入库成功')
     createVisible.value = false
     fetchList()
-  } catch (error) {
-    console.error(error)
-  }
+  } catch {}
 }
 
 // --- 退役逻辑 ---
@@ -270,22 +259,16 @@ const submitRetire = async () => {
     ElMessage.success('退役处理成功')
     retireVisible.value = false
     fetchList() // 刷新列表，状态将变为 retired
-  } catch (error) {
-    console.error(error)
-  }
+  } catch {}
 }
 
-onMounted(() => {
-  fetchList()
-})
-
-// 1. 时间格式化：把 T 替换掉，只保留年月日时分
+// 时间格式化：把 T 替换掉，只保留年月日时分
 const formatTime = (timeStr) => {
   if (!timeStr) return '';
   return timeStr.replace('T', ' ').substring(0, 16);
 }
 
-// 2. 事件类型翻译
+// 事件类型翻译
 const translateEventType = (type) => {
   const map = {
     'STOCK_IN': '入库登记',

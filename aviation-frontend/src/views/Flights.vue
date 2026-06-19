@@ -20,12 +20,12 @@
     {{ scope.row.landing_time.replace('T', ' ') }}
   </template>
 </el-table-column>
-      <el-table-column prop="flight_hours" label="飞行时长(H)" />
+      <el-table-column prop="flight_hours" label="飞行时长（小时）" />
       <el-table-column prop="mission_type" label="任务类型" />
       <el-table-column prop="recorder_name" label="记录人" />
     </el-table>
 
-    <el-dialog title="录入飞行日志" v-model="createVisible" width="500px">
+    <el-dialog title="新增飞行记录" v-model="createVisible" width="500px">
       <el-form :model="form" label-width="100px">
         <el-form-item label="飞机编号" required>
           <el-input v-model="form.aircraft_no" placeholder="如 AC-1001" />
@@ -49,7 +49,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitFlight">确认录入</el-button>
+        <el-button type="primary" @click="submitFlight">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -77,9 +77,7 @@ const fetchList = async () => {
   try {
     const res = await getFlightLogs()
     flightList.value = res.data || res || []
-  } catch (e) {
-    console.error(e)
-  } finally {
+  } catch {} finally {
     loading.value = false
   }
 }
@@ -87,12 +85,10 @@ const fetchList = async () => {
 const submitFlight = async () => {
   try {
     await createFlightLog(form.value)
-    ElMessage.success('飞行日志录入成功，部件飞行时长已自动更新！')
+    ElMessage.success('飞行记录新增成功，部件飞行时长已自动更新')
     createVisible.value = false
     fetchList()
-  } catch (e) {
-    console.error(e)
-  }
+  } catch {}
 }
 
 onMounted(fetchList)

@@ -1,39 +1,3 @@
-// import { createRouter, createWebHistory } from 'vue-router'
-// import Layout from '../layout/index.vue'
-
-// const routes = [
-//   {
-//     path: '/',
-//     component: Layout,
-//     redirect: '/dashboard', // 默认跳到仪表盘
-//     children: [
-//       {
-//         path: 'dashboard',
-//         name: 'Dashboard',
-//         component: () => import('../views/Dashboard.vue')
-//       },
-//       {
-//         path: 'components',
-//         name: 'Components',
-//         component: () => import('../views/Components.vue')
-//       },
-//       {
-//         path: 'installations',
-//         name: 'Installations',
-//         component: () => import('../views/Installations.vue')
-//       }
-//       // 以后其他的页面（比如安装、维修），都加在这个 children 数组里
-//     ]
-//   }
-// ]
-
-// const router = createRouter({
-//   history: createWebHistory(),
-//   routes
-// })
-
-// export default router
-
 import { createRouter, createWebHistory } from 'vue-router'
 import Layout from '../layout/index.vue'
 
