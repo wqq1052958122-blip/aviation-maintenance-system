@@ -9,3 +9,18 @@ export function getDashboardStats() {
 export function getSummaryStats() {
   return request.get('/stats/summary')
 }
+
+// 获取部件寿命预警
+export function getComponentLifeWarning() {
+  return request.get('/stats/component-life-warning')
+}
+
+// 获取退役原因统计
+export function getRetirementReasonStats() {
+  return request.get('/stats/retirement-reasons')
+}
+
+// 获取数据库完整性健康检查
+export function getDbIntegrityChecks() {
+  return request.get('/stats/db-integrity-checks')
+}

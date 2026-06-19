@@ -54,3 +54,117 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         })
     except SQLAlchemyError as exc:
         raise_db_error(exc, db)
+
+@router.get(
+    "/stats/component-life-warning",
+    summary="查询部件寿命预警",
+    description="查询视图 v_component_life_warning，按寿命使用比例降序返回部件寿命预警。",
+    response_model=dict,
+    responses=SUCCESS_RESPONSE,
+)
+def get_component_life_warning(db: Session = Depends(get_db)):
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT
+                    component_no,
+                    model_code,
+                    category,
+                    design_life_hours,
+                    used_hours,
+                    remaining_life_hours,
+                    life_usage_ratio,
+                    warning_level
+                FROM v_component_life_warning
+                ORDER BY life_usage_ratio DESC, component_no
+                """
+            )
+        ).mappings().all()
+        return ok([dict(row) for row in rows])
+    except SQLAlchemyError as exc:
+        raise_db_error(exc, db)
+
+
+@router.get(
+    "/stats/retirement-reasons",
+    summary="查询退役原因统计",
+    description="查询视图 v_retirement_reason_stats，返回各退役原因的部件数量。",
+    response_model=dict,
+    responses=SUCCESS_RESPONSE,
+)
+def get_retirement_reason_stats(db: Session = Depends(get_db)):
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT retirement_reason, retirement_count
+                FROM v_retirement_reason_stats
+                ORDER BY retirement_count DESC, retirement_reason
+                """
+            )
+        ).mappings().all()
+        return ok([dict(row) for row in rows])
+    except SQLAlchemyError as exc:
+        raise_db_error(exc, db)
+
+
+@router.get(
+    "/stats/db-integrity-checks",
+    summary="查询数据库完整性健康状态",
+    description="统计退役状态、机型适配和当前安装位置冲突等数据库完整性异常。",
+    response_model=dict,
+    responses=SUCCESS_RESPONSE,
+)
+def get_db_integrity_checks(db: Session = Depends(get_db)):
+    try:
+        retired_status_inconsistent_count = db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM Component
+                WHERE
+                    (status = 'retired' AND is_retired <> TRUE)
+                    OR (status <> 'retired' AND is_retired = TRUE)
+                """
+            )
+        ).scalar_one()
+
+        incompatible_active_installation_count = db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM InstallationRecord ir
+                JOIN Component c ON ir.component_id = c.component_id
+                JOIN ComponentModel cm ON c.model_id = cm.model_id
+                JOIN Aircraft a ON ir.aircraft_id = a.aircraft_id
+                WHERE ir.uninstall_time IS NULL
+                  AND cm.applicable_aircraft_model IS NOT NULL
+                  AND TRIM(cm.applicable_aircraft_model) <> ''
+                  AND cm.applicable_aircraft_model <> a.aircraft_model
+                """
+            )
+        ).scalar_one()
+
+        active_position_conflict_count = db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM (
+                    SELECT aircraft_id, install_position
+                    FROM InstallationRecord
+                    WHERE uninstall_time IS NULL
+                    GROUP BY aircraft_id, install_position
+                    HAVING COUNT(*) > 1
+                ) AS conflicts
+                """
+            )
+        ).scalar_one()
+
+        return ok({
+            "retired_status_inconsistent_count": retired_status_inconsistent_count,
+            "incompatible_active_installation_count": incompatible_active_installation_count,
+            "active_position_conflict_count": active_position_conflict_count,
+        })
+    except SQLAlchemyError as exc:
+        raise_db_error(exc, db)
