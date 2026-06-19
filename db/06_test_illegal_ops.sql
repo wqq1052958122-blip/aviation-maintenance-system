@@ -82,3 +82,48 @@ WHERE c.component_no = 'ENG-003';
 
 -- 预期错误：Component model is not compatible with the aircraft model.
 ROLLBACK;
+
+-- 测试12：retired 是终态，不能回到 available。预期：Illegal component status transition.
+UPDATE Component
+SET status = 'available', is_retired = FALSE
+WHERE component_no = 'HYD-002';
+
+-- 测试13：已完成的维修计划不能再次修改状态。
+-- 先逐句执行前三句创建并完成计划；最后一条 UPDATE 预期失败。
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status, created_by
+)
+SELECT component_id, 'status lock test', '2025-06-14 09:00:00',
+       'verify completed plan status is immutable', 'pending', 2
+FROM Component
+WHERE component_no = 'ENG-003';
+
+SET @completed_plan_id = LAST_INSERT_ID();
+
+UPDATE MaintenancePlan
+SET status = 'completed'
+WHERE plan_id = @completed_plan_id;
+
+UPDATE MaintenancePlan
+SET status = 'cancelled'
+WHERE plan_id = @completed_plan_id;
+
+-- 测试14：已取消的维修计划不能再次修改状态。
+-- 先逐句执行前三句创建并取消计划；最后一条 UPDATE 预期失败。
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status, created_by
+)
+SELECT component_id, 'cancel lock test', '2025-06-15 09:00:00',
+       'verify cancelled plan status is immutable', 'pending', 2
+FROM Component
+WHERE component_no = 'ENG-003';
+
+SET @cancelled_plan_id = LAST_INSERT_ID();
+
+UPDATE MaintenancePlan
+SET status = 'cancelled'
+WHERE plan_id = @cancelled_plan_id;
+
+UPDATE MaintenancePlan
+SET status = 'completed'
+WHERE plan_id = @cancelled_plan_id;

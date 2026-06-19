@@ -28,6 +28,24 @@ INSERT INTO Component (component_no, model_id, batch_no, production_date, status
 ('HYD-002', 3, 'BATCH-H-01', '2023-09-18', 'retired', 300.00, TRUE),
 ('NAV-002', 2, 'BATCH-N-02', '2024-02-01', 'under_maintenance', 15.00, FALSE);
 
+INSERT INTO ComponentStatusTransitionRule (from_status, to_status, description) VALUES
+('in_stock', 'available', 'Inventory inspection completed'),
+('in_stock', 'installed', 'Install directly from inventory'),
+('in_stock', 'under_maintenance', 'Inspection or repair before use'),
+('in_stock', 'retired', 'Retire unusable inventory component'),
+('available', 'installed', 'Install available component'),
+('available', 'under_maintenance', 'Send available component to maintenance'),
+('available', 'retired', 'Retire available component'),
+('installed', 'removed', 'Remove component from aircraft'),
+('installed', 'under_maintenance', 'Perform online maintenance'),
+('removed', 'available', 'Release removed component after inspection'),
+('removed', 'under_maintenance', 'Send removed component to maintenance'),
+('removed', 'retired', 'Retire removed component'),
+('under_maintenance', 'available', 'Maintenance passed for uninstalled component'),
+('under_maintenance', 'installed', 'Online maintenance passed'),
+('under_maintenance', 'removed', 'Maintenance failed but component is not retired'),
+('under_maintenance', 'retired', 'Scrap component after maintenance');
+
 INSERT INTO InstallationRecord (component_id, aircraft_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id) VALUES
 (1, 1, 'left engine position', '2025-01-10 09:00:00', NULL, 'initial installation', NULL, 1, NULL),
 (4, 1, 'navigation bay', '2025-02-01 10:00:00', NULL, 'initial installation', NULL, 1, NULL),
@@ -52,7 +70,10 @@ SELECT 'Operator' AS table_name, COUNT(*) AS row_count FROM Operator
 UNION ALL SELECT 'Aircraft', COUNT(*) FROM Aircraft
 UNION ALL SELECT 'ComponentModel', COUNT(*) FROM ComponentModel
 UNION ALL SELECT 'Component', COUNT(*) FROM Component
+UNION ALL SELECT 'ComponentStatusTransitionRule', COUNT(*) FROM ComponentStatusTransitionRule
 UNION ALL SELECT 'InstallationRecord', COUNT(*) FROM InstallationRecord
 UNION ALL SELECT 'MaintenanceRecord', COUNT(*) FROM MaintenanceRecord
+UNION ALL SELECT 'MaintenancePlan', COUNT(*) FROM MaintenancePlan
 UNION ALL SELECT 'FlightLog', COUNT(*) FROM FlightLog
-UNION ALL SELECT 'RetirementRecord', COUNT(*) FROM RetirementRecord;
+UNION ALL SELECT 'RetirementRecord', COUNT(*) FROM RetirementRecord
+UNION ALL SELECT 'AuditLog', COUNT(*) FROM AuditLog;

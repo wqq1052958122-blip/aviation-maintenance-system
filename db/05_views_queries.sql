@@ -5,6 +5,9 @@
 -- =====================================================
 USE aviation_maintenance;
 
+DROP VIEW IF EXISTS v_component_full_timeline;
+DROP VIEW IF EXISTS v_pending_maintenance_plan;
+DROP VIEW IF EXISTS v_audit_log_detail;
 DROP VIEW IF EXISTS v_component_life_warning;
 DROP VIEW IF EXISTS v_retirement_reason_stats;
 DROP VIEW IF EXISTS v_current_installation;
@@ -156,6 +159,139 @@ SELECT
 FROM RetirementRecord
 GROUP BY retirement_reason;
 
+CREATE VIEW v_audit_log_detail AS
+SELECT
+    al.audit_id,
+    al.operation_time,
+    al.operation_type,
+    al.target_table,
+    al.target_id,
+    al.operation_detail,
+    al.operator_id,
+    o.operator_name,
+    o.role AS operator_role
+FROM AuditLog al
+LEFT JOIN Operator o ON al.operator_id = o.operator_id;
+
+CREATE VIEW v_pending_maintenance_plan AS
+SELECT
+    mp.plan_id,
+    c.component_no,
+    cm.model_code,
+    cm.category,
+    mp.planned_type,
+    mp.planned_time,
+    mp.planned_reason,
+    mp.status,
+    mp.created_at,
+    mp.created_by,
+    o.operator_name AS created_by_name,
+    mp.related_maintenance_id
+FROM MaintenancePlan mp
+JOIN Component c ON mp.component_id = c.component_id
+JOIN ComponentModel cm ON c.model_id = cm.model_id
+LEFT JOIN Operator o ON mp.created_by = o.operator_id
+WHERE mp.status = 'pending';
+
+CREATE VIEW v_component_full_timeline AS
+SELECT
+    c.component_no,
+    c.created_at AS event_time,
+    'stock_in' AS event_type,
+    'Component entered inventory' AS event_title,
+    CONCAT('Model: ', cm.model_code, ', category: ', cm.category, ', batch: ', COALESCE(c.batch_no, 'N/A')) AS event_detail,
+    'Component' AS source_table,
+    c.component_id AS source_id
+FROM Component c
+JOIN ComponentModel cm ON c.model_id = cm.model_id
+UNION ALL
+SELECT
+    c.component_no,
+    ir.install_time,
+    'installation',
+    'Component installed',
+    CONCAT('Aircraft: ', a.aircraft_no, ', position: ', ir.install_position, ', reason: ', COALESCE(ir.install_reason, 'N/A')),
+    'InstallationRecord',
+    ir.installation_id
+FROM InstallationRecord ir
+JOIN Component c ON ir.component_id = c.component_id
+JOIN Aircraft a ON ir.aircraft_id = a.aircraft_id
+UNION ALL
+SELECT
+    c.component_no,
+    ir.uninstall_time,
+    'uninstallation',
+    'Component removed',
+    CONCAT('Aircraft: ', a.aircraft_no, ', position: ', ir.install_position, ', reason: ', COALESCE(ir.uninstall_reason, 'N/A')),
+    'InstallationRecord',
+    ir.installation_id
+FROM InstallationRecord ir
+JOIN Component c ON ir.component_id = c.component_id
+JOIN Aircraft a ON ir.aircraft_id = a.aircraft_id
+WHERE ir.uninstall_time IS NOT NULL
+UNION ALL
+SELECT
+    c.component_no,
+    mr.start_time,
+    'maintenance_start',
+    'Maintenance started',
+    CONCAT('Type: ', mr.maintenance_type, ', technician: ', COALESCE(o.operator_name, 'N/A'), ', description: ', COALESCE(mr.description, 'N/A')),
+    'MaintenanceRecord',
+    mr.maintenance_id
+FROM MaintenanceRecord mr
+JOIN Component c ON mr.component_id = c.component_id
+LEFT JOIN Operator o ON mr.technician_id = o.operator_id
+UNION ALL
+SELECT
+    c.component_no,
+    mr.end_time,
+    'maintenance_complete',
+    'Maintenance completed',
+    CONCAT('Type: ', mr.maintenance_type, ', result: ', mr.result, ', description: ', COALESCE(mr.description, 'N/A')),
+    'MaintenanceRecord',
+    mr.maintenance_id
+FROM MaintenanceRecord mr
+JOIN Component c ON mr.component_id = c.component_id
+WHERE mr.end_time IS NOT NULL
+UNION ALL
+SELECT
+    c.component_no,
+    rr.retirement_time,
+    'retirement',
+    'Component retired',
+    CONCAT('Reason: ', rr.retirement_reason, ', approved by: ', COALESCE(o.operator_name, 'N/A')),
+    'RetirementRecord',
+    rr.retirement_id
+FROM RetirementRecord rr
+JOIN Component c ON rr.component_id = c.component_id
+LEFT JOIN Operator o ON rr.approved_by = o.operator_id
+UNION ALL
+SELECT
+    c.component_no,
+    mp.created_at,
+    'maintenance_plan_created',
+    'Maintenance plan created',
+    CONCAT('Type: ', mp.planned_type, ', planned time: ', DATE_FORMAT(mp.planned_time, '%Y-%m-%d %H:%i:%s'), ', reason: ', COALESCE(mp.planned_reason, 'N/A')),
+    'MaintenancePlan',
+    mp.plan_id
+FROM MaintenancePlan mp
+JOIN Component c ON mp.component_id = c.component_id
+UNION ALL
+SELECT
+    c.component_no,
+    mp.completed_at,
+    CONCAT('maintenance_plan_', mp.status),
+    CASE mp.status
+        WHEN 'completed' THEN 'Maintenance plan completed'
+        ELSE 'Maintenance plan cancelled'
+    END,
+    CONCAT('Type: ', mp.planned_type, ', status: ', mp.status, ', related maintenance ID: ', COALESCE(CAST(mp.related_maintenance_id AS CHAR), 'N/A')),
+    'MaintenancePlan',
+    mp.plan_id
+FROM MaintenancePlan mp
+JOIN Component c ON mp.component_id = c.component_id
+WHERE mp.status IN ('completed', 'cancelled');
+
 SHOW FULL TABLES WHERE Table_type = 'VIEW';
 
 SELECT * FROM v_current_installation ORDER BY aircraft_no, install_position;
@@ -165,3 +301,6 @@ SELECT * FROM v_component_flight_usage WHERE component_no IN ('ENG-001', 'ENG-00
 SELECT * FROM v_model_maintenance_stats ORDER BY maintenance_count DESC;
 SELECT * FROM v_component_life_warning ORDER BY life_usage_ratio DESC, component_no;
 SELECT * FROM v_retirement_reason_stats ORDER BY retirement_count DESC, retirement_reason;
+SELECT * FROM v_audit_log_detail ORDER BY operation_time DESC, audit_id DESC;
+SELECT * FROM v_pending_maintenance_plan ORDER BY planned_time, plan_id;
+SELECT * FROM v_component_full_timeline ORDER BY component_no, event_time, source_table, source_id;

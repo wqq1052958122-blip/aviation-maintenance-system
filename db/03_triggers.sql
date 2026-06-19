@@ -7,6 +7,8 @@ USE aviation_maintenance;
 DELIMITER $$
 
 DROP TRIGGER IF EXISTS trg_before_insert_installation$$
+DROP TRIGGER IF EXISTS trg_before_update_component_status$$
+DROP TRIGGER IF EXISTS trg_before_update_maintenance_plan$$
 DROP TRIGGER IF EXISTS trg_after_insert_installation$$
 DROP TRIGGER IF EXISTS trg_before_update_installation$$
 DROP TRIGGER IF EXISTS trg_after_update_installation$$
@@ -23,6 +25,40 @@ DROP TRIGGER IF EXISTS trg_before_delete_maintenance$$
 DROP TRIGGER IF EXISTS trg_before_delete_flight$$
 DROP TRIGGER IF EXISTS trg_before_delete_retirement$$
 DROP TRIGGER IF EXISTS trg_before_delete_operator$$
+
+CREATE TRIGGER trg_before_update_component_status
+BEFORE UPDATE ON Component
+FOR EACH ROW
+BEGIN
+    DECLARE v_rule_count INT DEFAULT 0;
+
+    IF NOT (OLD.status <=> NEW.status) THEN
+        SELECT COUNT(*) INTO v_rule_count
+        FROM ComponentStatusTransitionRule
+        WHERE from_status = OLD.status
+          AND to_status = NEW.status;
+
+        IF v_rule_count = 0 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Illegal component status transition.';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER trg_before_update_maintenance_plan
+BEFORE UPDATE ON MaintenancePlan
+FOR EACH ROW
+BEGIN
+    IF OLD.status IN ('completed', 'cancelled')
+       AND NOT (OLD.status <=> NEW.status) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Completed or cancelled maintenance plan status cannot be changed.';
+    END IF;
+
+    IF OLD.status = 'pending'
+       AND NEW.status IN ('completed', 'cancelled')
+       AND NEW.completed_at IS NULL THEN
+        SET NEW.completed_at = NOW();
+    END IF;
+END$$
 
 CREATE TRIGGER trg_before_insert_installation
 BEFORE INSERT ON InstallationRecord

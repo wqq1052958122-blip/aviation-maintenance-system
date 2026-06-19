@@ -121,3 +121,47 @@ ORDER BY life_usage_ratio DESC, component_no;
 SELECT retirement_reason, retirement_count
 FROM v_retirement_reason_stats
 ORDER BY retirement_count DESC, retirement_reason;
+
+-- 测试7：确认成功执行的存储过程已在同一事务内写入审计日志
+SELECT
+    audit_id, operator_id, operation_type, target_table, target_id,
+    operation_time, operation_detail
+FROM AuditLog
+WHERE operation_type IN (
+    'component_replacement',
+    'component_retirement',
+    'maintenance_completion'
+)
+ORDER BY audit_id;
+
+SELECT *
+FROM v_audit_log_detail
+ORDER BY operation_time DESC, audit_id DESC;
+
+-- 测试8：新增待执行维修计划并查询待办视图
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status, created_by
+)
+SELECT
+    component_id,
+    'scheduled inspection',
+    '2025-07-01 09:00:00',
+    'procedure test maintenance plan',
+    'pending',
+    2
+FROM Component
+WHERE component_no = 'ENG-003';
+
+SET @test_plan_id = LAST_INSERT_ID();
+
+SELECT *
+FROM v_pending_maintenance_plan
+WHERE plan_id = @test_plan_id;
+
+-- 测试9：查询包含计划、安装、维修和退役事件的生命周期总时间轴
+SELECT
+    component_no, event_time, event_type, event_title,
+    event_detail, source_table, source_id
+FROM v_component_full_timeline
+WHERE component_no IN ('ENG-001', 'ENG-002', 'ENG-003', 'NAV-001', 'NAV-002')
+ORDER BY component_no, event_time, source_table, source_id;

@@ -25,6 +25,7 @@ BEGIN
     DECLARE v_new_component_id INT;
     DECLARE v_aircraft_id INT;
     DECLARE v_old_installation_id INT;
+    DECLARE v_new_installation_id INT;
     DECLARE v_old_count INT DEFAULT 0;
     DECLARE v_new_count INT DEFAULT 0;
     DECLARE v_aircraft_count INT DEFAULT 0;
@@ -111,6 +112,23 @@ BEGIN
         CONCAT('replacement for ', p_old_component_no), NULL, p_operator_id, NULL
     );
 
+    SET v_new_installation_id = LAST_INSERT_ID();
+
+    INSERT INTO AuditLog (
+        operator_id, operation_type, target_table, target_id, operation_time, operation_detail
+    ) VALUES (
+        p_operator_id,
+        'component_replacement',
+        'InstallationRecord',
+        v_new_installation_id,
+        v_replace_time,
+        CONCAT(
+            'Replaced component ', p_old_component_no, ' with ', p_new_component_no,
+            ' on aircraft ', p_aircraft_no, ' at ', p_install_position,
+            '; closed installation_id=', v_old_installation_id
+        )
+    );
+
     COMMIT;
 END$$
 
@@ -129,6 +147,7 @@ BEGIN
     DECLARE v_component_status VARCHAR(30);
     DECLARE v_is_retired BOOLEAN;
     DECLARE v_retirement_time DATETIME;
+    DECLARE v_retirement_id INT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -161,6 +180,19 @@ BEGIN
 
     INSERT INTO RetirementRecord (component_id, retirement_time, retirement_reason, approved_by, remark)
     VALUES (v_component_id, v_retirement_time, p_retirement_reason, p_approved_by, p_remark);
+
+    SET v_retirement_id = LAST_INSERT_ID();
+
+    INSERT INTO AuditLog (
+        operator_id, operation_type, target_table, target_id, operation_time, operation_detail
+    ) VALUES (
+        p_approved_by,
+        'component_retirement',
+        'RetirementRecord',
+        v_retirement_id,
+        v_retirement_time,
+        CONCAT('Retired component ', p_component_no, '; reason: ', p_retirement_reason)
+    );
 
     COMMIT;
 END$$
@@ -195,8 +227,11 @@ BEGIN
     SELECT COUNT(*) INTO v_count FROM MaintenanceRecord WHERE maintenance_id = p_maintenance_id;
     IF v_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance record does not exist.'; END IF;
 
-    SELECT component_id, start_time, result INTO v_component_id, v_start_time, v_old_result
-    FROM MaintenanceRecord WHERE maintenance_id = p_maintenance_id;
+    SELECT mr.component_id, c.component_no, mr.start_time, mr.result
+    INTO v_component_id, v_component_no, v_start_time, v_old_result
+    FROM MaintenanceRecord mr
+    JOIN Component c ON mr.component_id = c.component_id
+    WHERE mr.maintenance_id = p_maintenance_id;
 
     IF v_old_result <> 'pending' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only pending maintenance can be completed.';
@@ -237,6 +272,17 @@ BEGIN
         INSERT INTO RetirementRecord (component_id, retirement_time, retirement_reason, approved_by, remark)
         VALUES (v_component_id, v_end_time, COALESCE(p_retirement_reason, 'scrapped after maintenance'), p_approved_by, 'retired by sp_complete_maintenance');
     END IF;
+
+    INSERT INTO AuditLog (
+        operator_id, operation_type, target_table, target_id, operation_time, operation_detail
+    ) VALUES (
+        p_approved_by,
+        'maintenance_completion',
+        'MaintenanceRecord',
+        p_maintenance_id,
+        v_end_time,
+        CONCAT('Completed maintenance for component ', v_component_no, '; result: ', p_result)
+    );
 
     COMMIT;
 END$$
