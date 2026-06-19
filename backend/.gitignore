@@ -2,3 +2,8 @@ __pycache__/
 *.py[cod]
 .env
 .venv/
+backend/.env
+backend/.venv/
+aviation-frontend/node_modules/
+**/__pycache__/
+*.pyc
