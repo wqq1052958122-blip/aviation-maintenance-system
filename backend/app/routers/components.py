@@ -18,7 +18,7 @@ def get_component_id(db: Session, component_no: str) -> int:
         {"component_no": component_no},
     ).scalar_one_or_none()
     if component_id is None:
-        raise HTTPException(status_code=400, detail="Component does not exist.")
+        raise HTTPException(status_code=404, detail="Component does not exist.")
     return int(component_id)
 
 
@@ -86,7 +86,7 @@ def get_component_profile(component_no: str, db: Session = Depends(get_db)):
         {"component_no": component_no},
     ).mappings().first()
     if row is None:
-        raise HTTPException(status_code=400, detail="Component does not exist.")
+        raise HTTPException(status_code=404, detail="Component does not exist.")
     return ok(dict(row))
 
 
@@ -101,6 +101,7 @@ def get_component_profile(component_no: str, db: Session = Depends(get_db)):
     responses=SUCCESS_RESPONSE,
 )
 def get_component_lifecycle(component_no: str, db: Session = Depends(get_db)):
+    get_component_id(db, component_no)
     rows = db.execute(
         text(
             """

@@ -20,6 +20,11 @@ export function getComponentLifecycle(component_no) {
   return request.get(`/components/${component_no}/lifecycle`)
 }
 
+// 获取部件飞行使用统计
+export function getComponentFlightUsage(component_no) {
+  return request.get(`/components/${component_no}/flight-usage`)
+}
+
 // 退役部件
 export function retireComponent(component_no, data) {
   return request.post(`/components/${component_no}/retire`, data)

@@ -4,8 +4,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.routers.components import replace_component as replace_component_preferred
 from app.openapi_docs import SUCCESS_RESPONSE
-from app.schemas import InstallationCreate, InstallationUninstall
+from app.schemas import ComponentReplace, InstallationCreate, InstallationUninstall
 from app.utils.db_errors import raise_db_error
 from app.utils.responses import ok
 
@@ -121,22 +122,13 @@ def uninstall_installation(
     except SQLAlchemyError as exc:
         raise_db_error(exc, db)
 
-@router.post("/replace", summary="更换部件", description="调用数据库存储过程 sp_replace_component")
-def replace_component(payload: dict, db: Session = Depends(get_db)):
-    try:
-        # 严格按照 SQL 定义的 7 个参数顺序进行排列
-        db.execute(
-            text("CALL sp_replace_component("
-                 ":old_component_no, "
-                 ":new_component_no, "
-                 ":aircraft_no, "
-                 ":install_position, "
-                 ":replace_time, "
-                 ":operator_id, "
-                 ":uninstall_reason)"),
-            payload
-        )
-        db.commit()
-        return ok({"status": "replaced"})
-    except SQLAlchemyError as exc:
-        raise_db_error(exc, db)
+@router.post(
+    "/replace",
+    summary="更换部件（旧版）",
+    description="旧版兼容入口；请优先使用 POST /components/replace。",
+    response_model=dict,
+    responses=SUCCESS_RESPONSE,
+    deprecated=True,
+)
+def replace_component_legacy(payload: ComponentReplace, db: Session = Depends(get_db)):
+    return replace_component_preferred(payload, db)

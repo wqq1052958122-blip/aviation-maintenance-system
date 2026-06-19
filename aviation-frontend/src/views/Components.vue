@@ -18,6 +18,7 @@
           <el-tag v-else-if="scope.row.status === 'available'" type="success">可用</el-tag>
           <el-tag v-else-if="scope.row.status === 'installed'" type="primary">已安装</el-tag>
           <el-tag v-else-if="scope.row.status === 'removed'" type="warning">已拆卸/待修</el-tag>
+          <el-tag v-else-if="scope.row.status === 'under_maintenance'" type="warning">维修中</el-tag>
           <el-tag v-else-if="scope.row.status === 'retired'" type="danger">已退役</el-tag>
           <el-tag v-else>{{ scope.row.status }}</el-tag>
         </template>
@@ -47,6 +48,22 @@
           <el-descriptions-item label="生产批次">{{ profileData.batch_no }}</el-descriptions-item>
           <el-descriptions-item label="总飞行时长">{{ profileData.stored_total_flight_hours }} 小时</el-descriptions-item>
         </el-descriptions>
+
+        <h3>飞行使用统计</h3>
+        <el-table :data="flightUsageData" border style="width: 100%; margin-bottom: 20px;">
+          <el-table-column prop="aircraft_no" label="飞机编号" min-width="110" />
+          <el-table-column prop="flight_count" label="飞行次数" min-width="90" />
+          <el-table-column prop="calculated_total_flight_hours" label="总飞行小时" min-width="110" />
+          <el-table-column label="首次飞行时间" min-width="150">
+            <template #default="scope">{{ formatTime(scope.row.first_flight_time) || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="最后飞行时间" min-width="150">
+            <template #default="scope">{{ formatTime(scope.row.last_flight_time) || '-' }}</template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="暂无飞行使用记录" />
+          </template>
+        </el-table>
 
         <h3>历史轨迹 (Timeline)</h3>
         <el-timeline style="margin-top: 15px;">
@@ -111,7 +128,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getComponents, createComponent, getComponentProfile, getComponentLifecycle, retireComponent, getComponentModels } from '../api/components'
+import { getComponents, createComponent, getComponentProfile, getComponentLifecycle, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
 import { ElMessage } from 'element-plus'
 
 // 2. 定义变量
@@ -146,8 +163,6 @@ const fetchList = async () => {
   try {
     const res = await getComponents()
     componentList.value = res.data || res || []
-    // 关键调试：看一眼数据结构
-    console.log("部件实例数据:", componentList.value[0]) 
   } catch (error) {
     console.error(error)
   } finally {
@@ -161,6 +176,7 @@ const drawerLoading = ref(false)
 const currentComponentNo = ref('')
 const profileData = ref({})
 const lifecycleData = ref([])
+const flightUsageData = ref([])
 
 const openProfileDrawer = async (component_no) => {
   currentComponentNo.value = component_no
@@ -168,8 +184,11 @@ const openProfileDrawer = async (component_no) => {
   drawerLoading.value = true
   
   try {
-    const profileRes = await getComponentProfile(component_no)
-    const lifecycleRes = await getComponentLifecycle(component_no)
+    const [profileRes, lifecycleRes, flightUsageRes] = await Promise.all([
+      getComponentProfile(component_no),
+      getComponentLifecycle(component_no),
+      getComponentFlightUsage(component_no)
+    ])
     
     // 1. 档案数据提取
     profileData.value = profileRes.data || profileRes || {}
@@ -178,6 +197,7 @@ const openProfileDrawer = async (component_no) => {
     // 你需要取它的 .timeline 属性！
     const rawLifecycle = lifecycleRes.data || lifecycleRes;
     lifecycleData.value = rawLifecycle.timeline || []; // 从 timeline 字段取数组
+    flightUsageData.value = flightUsageRes.data || flightUsageRes || []
     
   } catch (error) {
     console.error(error)

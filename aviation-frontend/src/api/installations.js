@@ -17,5 +17,5 @@ export function uninstallComponent(installation_id, data) {
 
 // 更换部件
 export function replaceComponent(data) {
-  return request.post('/replace', data)
+  return request.post('/components/replace', data)
 }
