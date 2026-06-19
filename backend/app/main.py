@@ -4,11 +4,13 @@ from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from app.routers import (
     aircrafts,
+    audit_logs,
     component_models,
     components,
     flights,
     installations,
     maintenances,
+    maintenance_plans,
     stats,
 )
 from app.utils.db_errors import extract_db_message
@@ -63,9 +65,11 @@ def health():
 
 
 app.include_router(aircrafts.router)
+app.include_router(audit_logs.router)
 app.include_router(component_models.router)
 app.include_router(components.router)
 app.include_router(installations.router)
 app.include_router(maintenances.router)
+app.include_router(maintenance_plans.router)
 app.include_router(flights.router)
 app.include_router(stats.router)

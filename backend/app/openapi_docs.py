@@ -30,6 +30,8 @@ OPENAPI_TAGS = [
     {"name": "components", "description": "部件入库、档案、生命周期、飞行统计、更换和退役。"},
     {"name": "installations", "description": "部件安装和拆卸。数据库触发器负责拦截非法安装。"},
     {"name": "maintenances", "description": "维修记录创建、维修完成和部件维修历史查询。"},
+    {"name": "maintenance-plans", "description": "维修计划查询、创建、完成和取消。"},
+    {"name": "audit-logs", "description": "业务操作审计日志查询。"},
     {"name": "flights", "description": "飞行日志创建与查询。flight_hours 由后端自动计算。"},
     {"name": "stats", "description": "统计分析接口，主要读取数据库视图。"},
 ]

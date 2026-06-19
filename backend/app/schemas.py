@@ -124,6 +124,42 @@ class MaintenanceComplete(BaseModel):
     }
 
 
+class MaintenancePlanCreate(BaseModel):
+    component_no: str
+    planned_type: str
+    planned_time: datetime
+    planned_reason: Optional[str] = None
+    created_by: Optional[int] = None
+    related_maintenance_id: Optional[int] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "component_no": "ENG-003",
+                "planned_type": "scheduled inspection",
+                "planned_time": "2025-07-01 09:00:00",
+                "planned_reason": "periodic life inspection",
+                "created_by": 2,
+                "related_maintenance_id": None,
+            }
+        }
+    }
+
+
+class MaintenancePlanAction(BaseModel):
+    operator_id: Optional[int] = None
+    related_maintenance_id: Optional[int] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "operator_id": 2,
+                "related_maintenance_id": 3,
+            }
+        }
+    }
+
+
 class ComponentRetire(BaseModel):
     retirement_time: datetime
     retirement_reason: str
