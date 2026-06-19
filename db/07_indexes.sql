@@ -6,8 +6,10 @@
 USE aviation_maintenance;
 
 CREATE INDEX idx_component_status ON Component(status, is_retired);
+CREATE INDEX idx_component_model_category ON ComponentModel(category);
+CREATE INDEX idx_position_category ON AircraftInstallPosition(aircraft_id, allowed_category, is_active);
 CREATE INDEX idx_install_component_active ON InstallationRecord(component_id, uninstall_time);
-CREATE INDEX idx_install_aircraft_position_active ON InstallationRecord(aircraft_id, install_position, uninstall_time);
+CREATE INDEX idx_install_aircraft_position_active ON InstallationRecord(aircraft_id, position_id, uninstall_time);
 CREATE INDEX idx_install_time_range ON InstallationRecord(install_time, uninstall_time);
 CREATE INDEX idx_flight_aircraft_time ON FlightLog(aircraft_id, takeoff_time, landing_time);
 CREATE INDEX idx_maintenance_component_time ON MaintenanceRecord(component_id, start_time, end_time);

@@ -30,6 +30,8 @@ BEGIN
     DECLARE v_new_count INT DEFAULT 0;
     DECLARE v_aircraft_count INT DEFAULT 0;
     DECLARE v_operator_count INT DEFAULT 0;
+    DECLARE v_position_count INT DEFAULT 0;
+    DECLARE v_position_id INT;
     DECLARE v_active_old_install_count INT DEFAULT 0;
     DECLARE v_active_new_install_count INT DEFAULT 0;
     DECLARE v_new_status VARCHAR(30);
@@ -62,6 +64,23 @@ BEGIN
     IF v_aircraft_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft does not exist.'; END IF;
     SELECT aircraft_id INTO v_aircraft_id FROM Aircraft WHERE aircraft_no = p_aircraft_no;
 
+    SELECT COUNT(*) INTO v_position_count
+    FROM AircraftInstallPosition
+    WHERE aircraft_id = v_aircraft_id
+      AND position_code = p_install_position
+      AND is_active = TRUE;
+
+    IF v_position_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Installation position does not exist for this aircraft.';
+    END IF;
+
+    SELECT position_id INTO v_position_id
+    FROM AircraftInstallPosition
+    WHERE aircraft_id = v_aircraft_id
+      AND position_code = p_install_position
+      AND is_active = TRUE
+    LIMIT 1;
+
     SELECT COUNT(*) INTO v_operator_count FROM Operator WHERE operator_id = p_operator_id;
     IF v_operator_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Operator does not exist.'; END IF;
 
@@ -69,7 +88,7 @@ BEGIN
     FROM InstallationRecord
     WHERE component_id = v_old_component_id
       AND aircraft_id = v_aircraft_id
-      AND install_position = p_install_position
+      AND position_id = v_position_id
       AND uninstall_time IS NULL
       AND install_time <= v_replace_time;
 
@@ -81,7 +100,7 @@ BEGIN
     FROM InstallationRecord
     WHERE component_id = v_old_component_id
       AND aircraft_id = v_aircraft_id
-      AND install_position = p_install_position
+      AND position_id = v_position_id
       AND uninstall_time IS NULL
       AND install_time <= v_replace_time
     LIMIT 1;
@@ -105,10 +124,10 @@ BEGIN
     WHERE installation_id = v_old_installation_id;
 
     INSERT INTO InstallationRecord (
-        component_id, aircraft_id, install_position, install_time, uninstall_time,
+        component_id, aircraft_id, position_id, install_position, install_time, uninstall_time,
         install_reason, uninstall_reason, operator_id, uninstall_operator_id
     ) VALUES (
-        v_new_component_id, v_aircraft_id, p_install_position, v_replace_time, NULL,
+        v_new_component_id, v_aircraft_id, v_position_id, p_install_position, v_replace_time, NULL,
         CONCAT('replacement for ', p_old_component_no), NULL, p_operator_id, NULL
     );
 
@@ -245,9 +264,13 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'maintenance end_time cannot be earlier than start_time.';
     END IF;
 
-    IF p_result = 'scrapped' THEN
-        SELECT COUNT(*) INTO v_operator_count FROM Operator WHERE operator_id = p_approved_by;
-        IF v_operator_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Approver does not exist.'; END IF;
+    SELECT COUNT(*) INTO v_operator_count
+    FROM Operator
+    WHERE operator_id = p_approved_by
+      AND role = 'approver';
+
+    IF v_operator_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only approver can approve maintenance completion';
     END IF;
 
     UPDATE MaintenanceRecord

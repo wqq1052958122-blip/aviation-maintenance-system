@@ -6,9 +6,17 @@
     </div>
 
     <el-table :data="componentList" border style="width: 100%" v-loading="loading">
-      <el-table-column prop="component_id" label="ID" width="60" />
       <el-table-column prop="component_no" label="部件编号" width="150" />
-      <el-table-column prop="model_id" label="型号ID" width="80" />
+      <el-table-column label="部件类型" width="120">
+        <template #default="scope">
+          {{ formatComponentCategory(getComponentModel(scope.row.model_id)?.category) }}
+        </template>
+      </el-table-column>
+      <el-table-column label="型号代码" width="130">
+        <template #default="scope">
+          {{ getComponentModel(scope.row.model_id)?.model_code || '-' }}
+        </template>
+      </el-table-column>
       <el-table-column prop="batch_no" label="生产批次" />
       <el-table-column prop="total_flight_hours" label="总飞行小时" width="120" />
       
@@ -44,7 +52,7 @@
       <div v-loading="drawerLoading">
         <el-descriptions title="基础档案信息" :column="2" border style="margin-bottom: 20px;">
           <el-descriptions-item label="部件编号">{{ profileData.component_no }}</el-descriptions-item>
-          <el-descriptions-item label="所属类别">{{ profileData.category }}</el-descriptions-item>
+          <el-descriptions-item label="所属类别">{{ formatComponentCategory(profileData.category) }}</el-descriptions-item>
           <el-descriptions-item label="生产批次">{{ profileData.batch_no }}</el-descriptions-item>
           <el-descriptions-item label="总飞行时长">{{ profileData.stored_total_flight_hours }} 小时</el-descriptions-item>
         </el-descriptions>
@@ -103,11 +111,23 @@
         <el-form-item label="部件编号" required>
           <el-input v-model="createForm.component_no" placeholder="如 ENG-004" />
         </el-form-item>
-        <el-form-item label="型号ID" required>
-          <el-input-number v-model="createForm.model_id" :min="1" />
+        <el-form-item label="部件型号" required>
+          <el-select
+            v-model="createForm.model_id"
+            placeholder="请选择部件型号"
+            style="width: 100%"
+            :loading="modelLoading"
+          >
+            <el-option
+              v-for="model in modelList"
+              :key="model.model_id"
+              :label="formatComponentModelOption(model)"
+              :value="model.model_id"
+            />
+          </el-select>
         </el-form-item>
-        <el-form-item label="生产批次">
-          <el-input v-model="createForm.batch_no" />
+        <el-form-item label="生产批次" required>
+          <el-input v-model="createForm.batch_no" placeholder="请输入生产批次" />
         </el-form-item>
         <el-form-item label="生产日期" required>
           <el-date-picker v-model="createForm.production_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -127,6 +147,16 @@
         <el-form-item label="退役原因" required>
           <el-input v-model="retireForm.retirement_reason" type="textarea" placeholder="请填写退役原因，如：达到设计寿命、无法修复等" />
         </el-form-item>
+        <el-form-item label="审批人员" required>
+          <el-select v-model="retireForm.approved_by" placeholder="请选择退役审批人" style="width: 100%">
+            <el-option
+              v-for="op in operatorList.filter(o => o.role === 'approver')"
+              :key="op.operator_id"
+              :label="op.operator_name + '（' + translateRole(op.role) + '）'"
+              :value="op.operator_id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="备注说明">
           <el-input v-model="retireForm.remark" type="textarea" />
         </el-form-item>
@@ -143,8 +173,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getComponents, createComponent, getComponentProfile, getComponentFullTimeline, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
+import { getOperators } from '../api/operators'
 import { ElMessage } from 'element-plus'
 import {
+  formatComponentCategory,
   formatLifecycleDetail,
   formatLifecycleEventType,
   formatLifecycleTitle
@@ -153,6 +185,7 @@ import {
 // 2. 定义变量
 const componentList = ref([])
 const modelList = ref([]) // 用于存放型号数据
+const operatorList = ref([])
 const loading = ref(false)
 const modelLoading = ref(false)
 
@@ -172,7 +205,34 @@ const fetchModels = async () => {
 onMounted(() => {
   fetchList()    // 原有的部件实例获取
   fetchModels()  // 新增的型号字典获取
+  fetchOperators()
 })
+
+const fetchOperators = async () => {
+  try {
+    const res = await getOperators()
+    operatorList.value = res.data || res || []
+  } catch {}
+}
+
+const translateRole = (role) => ({
+  installer: '安装人员',
+  technician: '维修技师',
+  approver: '审批主管',
+  admin: '系统管理员'
+}[role] || role)
+
+const getDefaultOperatorId = (role) => {
+  return operatorList.value.find(op => op.role === role)?.operator_id || null
+}
+
+const getComponentModel = (modelId) => {
+  return modelList.value.find(model => Number(model.model_id) === Number(modelId))
+}
+
+const formatComponentModelOption = (model) => {
+  return `${formatComponentCategory(model.category)} / ${model.model_code}`
+}
 
 const fetchList = async () => {
   loading.value = true
@@ -262,10 +322,13 @@ const getTimelineType = (eventType) => {
 const createVisible = ref(false)
 const createForm = ref({})
 
-const openCreateDialog = () => {
+const openCreateDialog = async () => {
+  if (!modelList.value.length) {
+    await fetchModels()
+  }
   createForm.value = {
     component_no: '',
-    model_id: 1,
+    model_id: modelList.value[0]?.model_id || null,
     batch_no: '',
     production_date: ''
   }
@@ -274,8 +337,13 @@ const openCreateDialog = () => {
 
 const submitCreate = async () => {
   if (!createForm.value.component_no) return ElMessage.warning('请填写部件编号')
+  if (!createForm.value.model_id) return ElMessage.warning('请选择部件型号')
+  if (!createForm.value.batch_no?.trim()) return ElMessage.warning('请输入生产批次')
   try {
-    await createComponent(createForm.value)
+    await createComponent({
+      ...createForm.value,
+      batch_no: createForm.value.batch_no.trim()
+    })
     ElMessage.success('新部件入库成功')
     createVisible.value = false
     fetchList()
@@ -292,7 +360,7 @@ const openRetireDialog = (row) => {
   retireForm.value = {
     retirement_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
     retirement_reason: '',
-    approved_by: 1, // 模拟审批人ID
+    approved_by: getDefaultOperatorId('approver'),
     remark: ''
   }
   retireVisible.value = true
@@ -300,6 +368,7 @@ const openRetireDialog = (row) => {
 
 const submitRetire = async () => {
   if (!retireForm.value.retirement_reason) return ElMessage.warning('退役原因必填')
+  if (!retireForm.value.approved_by) return ElMessage.warning('请选择退役审批人')
   try {
     await retireComponent(retireTarget.value, retireForm.value)
     ElMessage.success('退役处理成功')

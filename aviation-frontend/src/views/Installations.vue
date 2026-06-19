@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="app-container">
     <div class="header-action">
       <h2>机载部件安装与管理</h2>
@@ -35,20 +35,26 @@
     <el-dialog title="新增部件安装" v-model="installDialogVisible" width="500px">
       <el-form :model="installForm" label-width="120px">
         <el-form-item label="部件编号" required>
-          <el-input v-model="installForm.component_no" placeholder="输入部件编号" />
+          <el-input v-model="installForm.component_no" placeholder="输入部件编号" @change="loadInstallPositions" />
         </el-form-item>
         <el-form-item label="飞机编号" required>
-          <el-input v-model="installForm.aircraft_no" placeholder="输入飞机编号" />
+          <el-input v-model="installForm.aircraft_no" placeholder="输入飞机编号" @change="loadInstallPositions" />
         </el-form-item>
         <el-form-item label="安装位置" required>
-          <el-select v-model="installForm.install_position" placeholder="请选择安装位置" style="width: 100%">
-            <el-option label="左侧发动机" value="left engine position" />
-            <el-option label="右侧发动机" value="right engine position" />
-            <el-option label="导航舱" value="navigation bay" />
-            <el-option label="液压系统舱" value="hydraulic system bay" />
-            <el-option label="主起落架" value="main landing gear" />
-            <el-option label="机头雷达罩" value="nose" />
-            <el-option label="尾翼" value="tail" />
+          <el-select
+            v-model="installForm.install_position"
+            placeholder="请先输入飞机编号和部件编号"
+            style="width: 100%"
+            :disabled="!installForm.aircraft_no || !installForm.component_no"
+            @visible-change="visible => visible && loadInstallPositions(false)"
+          >
+            <el-option
+              v-for="pos in installPositionOptions"
+              :key="pos.position_id"
+              :label="`${pos.position_name}（${formatComponentCategory(pos.allowed_category)}）${pos.is_occupied ? ' - 已占用' : ''}`"
+              :value="pos.position_code"
+              :disabled="Boolean(pos.is_occupied)"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="安装时间" required>
@@ -65,9 +71,9 @@
         <el-form-item label="操作人员" required>
   <el-select v-model="installForm.operator_id" placeholder="请选择操作人" style="width: 100%">
     <el-option 
-      v-for="op in operatorList.filter(o => o.role === 'installer' || o.role === 'admin')" 
+      v-for="op in operatorList.filter(o => o.role === 'installer')" 
       :key="op.operator_id" 
-      :label="op.operator_name" 
+      :label="op.operator_name + '（' + translateRole(op.role) + '）'" 
       :value="op.operator_id" 
     />
   </el-select>
@@ -95,8 +101,15 @@
         <el-form-item label="拆卸原因" required>
           <el-input v-model="uninstallForm.uninstall_reason" type="textarea" />
         </el-form-item>
-        <el-form-item label="操作员ID">
-          <el-input v-model.number="uninstallForm.uninstall_operator_id" type="number" />
+        <el-form-item label="操作人员" required>
+          <el-select v-model="uninstallForm.uninstall_operator_id" placeholder="请选择拆卸人员" style="width: 100%">
+            <el-option
+              v-for="op in operatorList.filter(o => o.role === 'installer')"
+              :key="op.operator_id"
+              :label="op.operator_name + '（' + translateRole(op.role) + '）'"
+              :value="op.operator_id"
+            />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -119,6 +132,16 @@
         <el-form-item label="安装原因">
           <el-input v-model="replaceForm.install_reason" type="textarea" />
         </el-form-item>
+        <el-form-item label="操作人员" required>
+          <el-select v-model="replaceForm.operator_id" placeholder="请选择更换操作人员" style="width: 100%">
+            <el-option
+              v-for="op in operatorList.filter(o => o.role === 'installer')"
+              :key="op.operator_id"
+              :label="op.operator_name + '（' + translateRole(op.role) + '）'"
+              :value="op.operator_id"
+            />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="replaceDialogVisible = false">取消</el-button>
@@ -131,11 +154,24 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
-import { getActiveInstallations, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
+import { getActiveInstallations, getInstallPositions, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
 import { ElMessage } from 'element-plus'
 import { getOperators } from '../api/operators' // 引入接口
+import { formatComponentCategory } from '../utils/businessFormatters'
 
 const operatorList = ref([]) // 存下拉框的数据
+const installPositionOptions = ref([])
+
+const translateRole = (role) => ({
+  installer: '安装人员',
+  technician: '维修技师',
+  approver: '审批主管',
+  admin: '系统管理员'
+}[role] || role)
+
+const getDefaultOperatorId = (role) => {
+  return operatorList.value.find(op => op.role === role)?.operator_id || null
+}
 
 // 在 onMounted 里调用它：
 onMounted(async () => {
@@ -181,7 +217,7 @@ const installForm = ref({
   install_position: '',
   install_time: '',
   install_reason: '',
-  operator_id: 1
+  operator_id: null
 })
 
 const uninstallDialogVisible = ref(false)
@@ -191,7 +227,7 @@ const uninstallForm = ref({
   aircraft_no: '',
   uninstall_time: '',
   uninstall_reason: '',
-  uninstall_operator_id: 1
+  uninstall_operator_id: null
 })
 
 const replaceDialogVisible = ref(false)
@@ -203,6 +239,18 @@ const fetchData = async () => {
   loading.value = false
 }
 
+const loadInstallPositions = async (resetSelected = true) => {
+  if (resetSelected) installForm.value.install_position = ''
+  installPositionOptions.value = []
+  if (!installForm.value.aircraft_no || !installForm.value.component_no) return
+  try {
+    installPositionOptions.value = await getInstallPositions({
+      aircraft_no: installForm.value.aircraft_no,
+      component_no: installForm.value.component_no
+    })
+  } catch {}
+}
+
 const openInstallDialog = () => {
   const now = new Date()
   installForm.value = {
@@ -211,14 +259,19 @@ const openInstallDialog = () => {
     install_position: '',
     install_time: formatDateTime(now),
     install_reason: '正常安装',
-    operator_id: 1
+    operator_id: getDefaultOperatorId('installer')
   }
+  installPositionOptions.value = []
   installDialogVisible.value = true
 }
 
 const handleInstall = async () => {
   if (!installForm.value.component_no || !installForm.value.aircraft_no || !installForm.value.install_position || !installForm.value.install_time) {
     ElMessage.warning('请填写必填项')
+    return
+  }
+  if (!installForm.value.operator_id) {
+    ElMessage.warning('请选择安装人员')
     return
   }
   try {
@@ -237,7 +290,7 @@ const openUninstallDialog = (row) => {
     aircraft_no: row.aircraft_no,
     uninstall_time: formatDateTime(now),
     uninstall_reason: '',
-    uninstall_operator_id: 1
+    uninstall_operator_id: getDefaultOperatorId('installer')
   }
   uninstallDialogVisible.value = true
 }
@@ -245,6 +298,10 @@ const openUninstallDialog = (row) => {
 const handleUninstall = async () => {
   if (!uninstallForm.value.uninstall_time || !uninstallForm.value.uninstall_reason) {
     ElMessage.warning('请填写拆卸时间和原因')
+    return
+  }
+  if (!uninstallForm.value.uninstall_operator_id) {
+    ElMessage.warning('请选择拆卸人员')
     return
   }
   try {
@@ -267,7 +324,7 @@ const openReplaceDialog = (row) => {
     new_component_no: '',
     install_position: row.install_position,
     replace_time: formatDateTime(now),
-    operator_id: 1,
+    operator_id: getDefaultOperatorId('installer'),
     install_reason: '常规更换',
     uninstall_reason: '部件磨损更换'
   }
@@ -275,6 +332,10 @@ const openReplaceDialog = (row) => {
 }
 
 const handleReplace = async () => {
+  if (!replaceForm.value.new_component_no || !replaceForm.value.operator_id) {
+    ElMessage.warning('请填写新部件编号并选择更换操作人员')
+    return
+  }
   try {
     await replaceComponent(replaceForm.value);
     ElMessage.success('更换成功！');

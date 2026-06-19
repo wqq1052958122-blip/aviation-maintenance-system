@@ -80,6 +80,20 @@ BEGIN
     DECLARE v_aircraft_status VARCHAR(30);
     DECLARE v_aircraft_model VARCHAR(50);
     DECLARE v_applicable_aircraft_model VARCHAR(50);
+    DECLARE v_installer_count INT DEFAULT 0;
+    DECLARE v_position_count INT DEFAULT 0;
+    DECLARE v_position_code VARCHAR(100);
+    DECLARE v_position_allowed_category VARCHAR(50);
+    DECLARE v_component_category VARCHAR(50);
+
+    SELECT COUNT(*) INTO v_installer_count
+    FROM Operator
+    WHERE operator_id = NEW.operator_id
+      AND role = 'installer';
+
+    IF v_installer_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only installer can perform installation';
+    END IF;
 
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_id = NEW.component_id;
     IF v_component_count = 0 THEN
@@ -114,7 +128,8 @@ BEGIN
     FROM Aircraft
     WHERE aircraft_id = NEW.aircraft_id;
 
-    SELECT cm.applicable_aircraft_model INTO v_applicable_aircraft_model
+    SELECT cm.applicable_aircraft_model, cm.category
+    INTO v_applicable_aircraft_model, v_component_category
     FROM Component c
     JOIN ComponentModel cm ON c.model_id = cm.model_id
     WHERE c.component_id = NEW.component_id;
@@ -128,11 +143,32 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retired aircraft cannot accept new installation.';
     END IF;
 
+    SELECT COUNT(*) INTO v_position_count
+    FROM AircraftInstallPosition
+    WHERE position_id = NEW.position_id
+      AND aircraft_id = NEW.aircraft_id
+      AND is_active = TRUE;
+
+    IF v_position_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Installation position does not exist for this aircraft.';
+    END IF;
+
+    SELECT position_code, allowed_category
+    INTO v_position_code, v_position_allowed_category
+    FROM AircraftInstallPosition
+    WHERE position_id = NEW.position_id;
+
+    SET NEW.install_position = v_position_code;
+
+    IF v_component_category <> v_position_allowed_category THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Component category does not match installation position.';
+    END IF;
+
     -- 新增：同一飞机同一安装位置不能同时存在多个有效安装记录
     SELECT COUNT(*) INTO v_position_active_count
     FROM InstallationRecord
     WHERE aircraft_id = NEW.aircraft_id
-      AND install_position = NEW.install_position
+      AND position_id = NEW.position_id
       AND uninstall_time IS NULL;
 
     IF v_position_active_count > 0 THEN
@@ -157,6 +193,8 @@ CREATE TRIGGER trg_before_update_installation
 BEFORE UPDATE ON InstallationRecord
 FOR EACH ROW
 BEGIN
+    DECLARE v_uninstaller_count INT DEFAULT 0;
+
     IF NOT (OLD.component_id <=> NEW.component_id) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'component_id in installation history cannot be changed.';
     END IF;
@@ -166,11 +204,25 @@ BEGIN
     IF NOT (OLD.install_position <=> NEW.install_position) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'install_position in installation history cannot be changed.';
     END IF;
+    IF NOT (OLD.position_id <=> NEW.position_id) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'position_id in installation history cannot be changed.';
+    END IF;
     IF NOT (OLD.install_time <=> NEW.install_time) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'install_time in installation history cannot be changed.';
     END IF;
     IF NOT (OLD.operator_id <=> NEW.operator_id) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'install operator in installation history cannot be changed.';
+    END IF;
+
+    IF OLD.uninstall_time IS NULL AND NEW.uninstall_time IS NOT NULL THEN
+        SELECT COUNT(*) INTO v_uninstaller_count
+        FROM Operator
+        WHERE operator_id = NEW.uninstall_operator_id
+          AND role = 'installer';
+
+        IF v_uninstaller_count = 0 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only installer can perform uninstallation';
+        END IF;
     END IF;
 
     IF OLD.uninstall_time IS NOT NULL THEN
@@ -193,6 +245,31 @@ BEGIN
     IF OLD.uninstall_time IS NULL AND NEW.uninstall_time IS NOT NULL THEN
         UPDATE Component SET status = 'removed'
         WHERE component_id = NEW.component_id AND status = 'installed';
+
+        INSERT INTO MaintenancePlan (
+            component_id,
+            planned_type,
+            planned_time,
+            planned_reason,
+            status,
+            created_by,
+            related_maintenance_id
+        )
+        SELECT
+            NEW.component_id,
+            'post_removal_inspection',
+            NEW.uninstall_time,
+            'post removal inspection required before reinstallation',
+            'pending',
+            NEW.uninstall_operator_id,
+            NULL
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM MaintenancePlan
+            WHERE component_id = NEW.component_id
+              AND planned_type = 'post_removal_inspection'
+              AND status = 'pending'
+        );
     END IF;
 END$$
 
@@ -204,6 +281,16 @@ BEGIN
     DECLARE v_component_status VARCHAR(30);
     DECLARE v_is_retired BOOLEAN;
     DECLARE v_pending_maintenance_count INT DEFAULT 0;
+    DECLARE v_technician_count INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_technician_count
+    FROM Operator
+    WHERE operator_id = NEW.technician_id
+      AND role = 'technician';
+
+    IF v_technician_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only technician can perform maintenance';
+    END IF;
 
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_id = NEW.component_id;
     IF v_component_count = 0 THEN
@@ -214,6 +301,10 @@ BEGIN
 
     IF v_component_status = 'retired' OR v_is_retired = TRUE THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retired component cannot be maintained.';
+    END IF;
+
+    IF v_component_status = 'installed' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Installed component must be uninstalled before maintenance';
     END IF;
 
     SELECT COUNT(*) INTO v_pending_maintenance_count
@@ -268,6 +359,16 @@ BEGIN
     DECLARE v_current_install_count INT DEFAULT 0;
     DECLARE v_component_status VARCHAR(30);
     DECLARE v_is_retired BOOLEAN;
+    DECLARE v_approver_count INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_approver_count
+    FROM Operator
+    WHERE operator_id = NEW.approved_by
+      AND role = 'approver';
+
+    IF v_approver_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only approver can approve retirement';
+    END IF;
 
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_id = NEW.component_id;
     IF v_component_count = 0 THEN

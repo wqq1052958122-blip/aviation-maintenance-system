@@ -32,6 +32,12 @@ CREATE TABLE Aircraft (
     CONSTRAINT chk_aircraft_status CHECK (service_status IN ('active', 'maintenance', 'retired'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='飞机表';
 
+CREATE TABLE ComponentCategory (
+    category_code VARCHAR(50) PRIMARY KEY COMMENT '部件类别编码',
+    category_name VARCHAR(100) NOT NULL COMMENT '部件类别名称',
+    description VARCHAR(255) COMMENT '类别说明'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='部件类别字典表';
+
 CREATE TABLE ComponentModel (
     model_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '部件型号ID',
     model_code VARCHAR(50) NOT NULL UNIQUE COMMENT '部件型号编码',
@@ -40,6 +46,7 @@ CREATE TABLE ComponentModel (
     maintenance_cycle_hours INT NOT NULL COMMENT '维修周期小时',
     applicable_aircraft_model VARCHAR(50) COMMENT '适用飞机型号',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    CONSTRAINT fk_component_model_category FOREIGN KEY (category) REFERENCES ComponentCategory(category_code),
     CONSTRAINT chk_design_life CHECK (design_life_hours > 0),
     CONSTRAINT chk_maintenance_cycle CHECK (maintenance_cycle_hours > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='部件型号表';
@@ -53,7 +60,8 @@ CREATE TABLE Component (
     status VARCHAR(30) NOT NULL DEFAULT 'in_stock' COMMENT '当前状态',
     total_flight_hours DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '历史兼容冗余字段；权威累计飞行小时以 FlightLog 与 InstallationRecord 推导视图为准',
     is_retired BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否退役',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
+    stock_in_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '真实业务入库时间',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '数据库记录创建时间',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT fk_component_model FOREIGN KEY (model_id) REFERENCES ComponentModel(model_id),
     CONSTRAINT chk_component_status CHECK (status IN ('in_stock','installed','removed','under_maintenance','available','retired')),
@@ -68,10 +76,24 @@ CREATE TABLE ComponentStatusTransitionRule (
     PRIMARY KEY (from_status, to_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='部件状态合法流转规则表';
 
+CREATE TABLE AircraftInstallPosition (
+    position_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '安装位置ID',
+    aircraft_id INT NOT NULL COMMENT '飞机ID',
+    position_code VARCHAR(100) NOT NULL COMMENT '安装位置编码',
+    position_name VARCHAR(100) NOT NULL COMMENT '安装位置名称',
+    allowed_category VARCHAR(50) NOT NULL COMMENT '该位置允许安装的部件类别',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否启用',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    CONSTRAINT fk_position_aircraft FOREIGN KEY (aircraft_id) REFERENCES Aircraft(aircraft_id),
+    CONSTRAINT fk_position_category FOREIGN KEY (allowed_category) REFERENCES ComponentCategory(category_code),
+    CONSTRAINT uq_aircraft_position UNIQUE (aircraft_id, position_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='飞机安装位置与允许部件类别表';
+
 CREATE TABLE InstallationRecord (
     installation_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '安装记录ID',
     component_id INT NOT NULL COMMENT '部件ID',
     aircraft_id INT NOT NULL COMMENT '飞机ID',
+    position_id INT NOT NULL COMMENT '规范安装位置ID',
     install_position VARCHAR(100) NOT NULL COMMENT '安装位置',
     install_time DATETIME NOT NULL COMMENT '安装时间',
     uninstall_time DATETIME NULL COMMENT '拆卸时间，NULL表示当前仍在安装中',
@@ -83,6 +105,7 @@ CREATE TABLE InstallationRecord (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT fk_install_component FOREIGN KEY (component_id) REFERENCES Component(component_id),
     CONSTRAINT fk_install_aircraft FOREIGN KEY (aircraft_id) REFERENCES Aircraft(aircraft_id),
+    CONSTRAINT fk_install_position FOREIGN KEY (position_id) REFERENCES AircraftInstallPosition(position_id),
     CONSTRAINT fk_install_operator FOREIGN KEY (operator_id) REFERENCES Operator(operator_id),
     CONSTRAINT fk_uninstall_operator FOREIGN KEY (uninstall_operator_id) REFERENCES Operator(operator_id),
     CONSTRAINT chk_install_time CHECK (uninstall_time IS NULL OR uninstall_time >= install_time)

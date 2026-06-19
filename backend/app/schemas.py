@@ -9,6 +9,7 @@ class ComponentCreate(BaseModel):
     model_id: int
     batch_no: Optional[str] = None
     production_date: Optional[date] = None
+    stock_in_time: Optional[datetime] = None
 
     model_config = {
         "json_schema_extra": {
@@ -17,6 +18,7 @@ class ComponentCreate(BaseModel):
                 "model_id": 1,
                 "batch_no": "BATCH-2025-01",
                 "production_date": "2025-01-01",
+                "stock_in_time": "2025-01-10 09:00:00",
             }
         }
     }
