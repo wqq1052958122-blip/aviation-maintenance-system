@@ -51,7 +51,7 @@
             <el-option
               v-for="pos in installPositionOptions"
               :key="pos.position_id"
-              :label="`${pos.position_name}（${translateCategory(pos.allowed_category)}）${pos.is_occupied ? ' - 已占用' : ''}`"
+              :label="`${pos.position_name}（${formatComponentCategory(pos.allowed_category)}）${pos.is_occupied ? ' - 已占用' : ''}`"
               :value="pos.position_code"
               :disabled="Boolean(pos.is_occupied)"
             />
@@ -157,6 +157,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { getActiveInstallations, getInstallPositions, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
 import { ElMessage } from 'element-plus'
 import { getOperators } from '../api/operators' // 引入接口
+import { formatComponentCategory } from '../utils/businessFormatters'
 
 const operatorList = ref([]) // 存下拉框的数据
 const installPositionOptions = ref([])
@@ -167,15 +168,6 @@ const translateRole = (role) => ({
   approver: '审批主管',
   admin: '系统管理员'
 }[role] || role)
-
-const translateCategory = (category) => ({
-  engine: '发动机类',
-  navigation: '导航类',
-  hydraulic: '液压类',
-  battery: '电池类',
-  avionics: '航电类',
-  landing_gear: '起落架类'
-}[category] || category)
 
 const getDefaultOperatorId = (role) => {
   return operatorList.value.find(op => op.role === role)?.operator_id || null

@@ -245,6 +245,31 @@ BEGIN
     IF OLD.uninstall_time IS NULL AND NEW.uninstall_time IS NOT NULL THEN
         UPDATE Component SET status = 'removed'
         WHERE component_id = NEW.component_id AND status = 'installed';
+
+        INSERT INTO MaintenancePlan (
+            component_id,
+            planned_type,
+            planned_time,
+            planned_reason,
+            status,
+            created_by,
+            related_maintenance_id
+        )
+        SELECT
+            NEW.component_id,
+            'post_removal_inspection',
+            NEW.uninstall_time,
+            'post removal inspection required before reinstallation',
+            'pending',
+            NEW.uninstall_operator_id,
+            NULL
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM MaintenancePlan
+            WHERE component_id = NEW.component_id
+              AND planned_type = 'post_removal_inspection'
+              AND status = 'pending'
+        );
     END IF;
 END$$
 

@@ -85,7 +85,9 @@
       <el-table :data="lifeWarningData" border style="width: 100%">
         <el-table-column prop="component_no" label="部件编号" min-width="110" />
         <el-table-column prop="model_code" label="型号" min-width="110" />
-        <el-table-column prop="category" label="类别" min-width="100" />
+        <el-table-column label="类别" min-width="100">
+          <template #default="scope">{{ formatComponentCategory(scope.row.category) }}</template>
+        </el-table-column>
         <el-table-column label="设计寿命" min-width="100">
           <template #default="scope">{{ formatHours(scope.row.design_life_hours) }}</template>
         </el-table-column>
@@ -130,6 +132,7 @@ import { getRecentAuditLogs } from '../api/auditLogs'
 import {
   formatAuditDetail,
   formatAuditOperationType,
+  formatComponentCategory,
   formatRetirementReason
 } from '../utils/businessFormatters'
 import {

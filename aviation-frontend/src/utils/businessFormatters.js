@@ -11,6 +11,7 @@ const maintenanceTypeMap = {
   'fault repair': '故障维修',
   overhaul: '深度大修',
   'replacement check': '更换检查',
+  post_removal_inspection: '拆卸后检查',
   'life warning inspection': '寿命预警检查',
   'status lock test': '状态锁定测试',
   'cancel lock test': '取消锁定测试'
@@ -38,6 +39,7 @@ const commonTextMap = {
   'navigation module repaired and test passed.': '导航模块维修并测试通过。',
   'online inspection for installed-state verification.': '用于验证安装状态的在线检查。',
   'online inspection passed while component remains installed.': '在线检查通过，部件保持安装状态。',
+  'post removal inspection required before reinstallation': '部件拆卸后需检查，检查通过后方可再次安装',
   'n/a': '未填写'
 }
 
@@ -53,9 +55,14 @@ const positionMap = {
 
 const categoryMap = {
   engine: '发动机',
-  navigation: '导航设备',
-  hydraulic: '液压设备'
+  navigation: '导航',
+  hydraulic: '液压',
+  battery: '电池',
+  avionics: '航电',
+  landing_gear: '起落架'
 }
+
+export const formatComponentCategory = (value) => categoryMap[normalize(value)] || (normalize(value) === 'n/a' ? '未填写类别' : value || '-')
 
 export const formatMaintenanceType = (value) => maintenanceTypeMap[normalize(value)] || value || '-'
 
@@ -121,7 +128,7 @@ export const formatBusinessText = (value) => {
 }
 
 const formatPosition = (value) => positionMap[normalize(value)] || (normalize(value) === 'n/a' ? '未记录位置' : value || '-')
-const formatCategory = (value) => categoryMap[normalize(value)] || (normalize(value) === 'n/a' ? '未填写类别' : value || '-')
+const formatCategory = (value) => formatComponentCategory(value)
 const formatPerson = (value) => normalize(value) === 'n/a' ? '未记录' : value || '未记录'
 
 export const formatAuditDetail = (detail) => {
