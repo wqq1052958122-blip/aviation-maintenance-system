@@ -1,13 +1,23 @@
 ﻿<template>
   <div class="app-container">
-    <div class="header-action">
-      <h2>机载部件安装与管理</h2>
+    <div class="page-header">
+      <div><h2>安装管理</h2><p>管理部件安装、拆卸、更换及当前安装状态</p></div>
       <el-button type="primary" @click="openInstallDialog">
         <el-icon><Plus /></el-icon> 新增安装
       </el-button>
     </div>
+
+    <div class="filter-panel">
+      <el-form class="filter-form" inline>
+        <el-form-item label="飞机编号"><el-input v-model="filters.aircraftNo" clearable placeholder="输入飞机编号" style="width: 160px" /></el-form-item>
+        <el-form-item label="部件编号"><el-input v-model="filters.componentNo" clearable placeholder="输入部件编号" style="width: 160px" /></el-form-item>
+        <el-form-item label="安装位置"><el-input v-model="filters.position" clearable placeholder="输入安装位置" style="width: 170px" /></el-form-item>
+        <el-form-item label="记录范围"><el-select v-model="filters.scope" placeholder="全部记录" style="width: 150px"><el-option label="全部记录" value="all" /><el-option label="当前安装" value="current" /><el-option label="历史安装" value="history" /></el-select></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchData">刷新</el-button></div></el-form-item>
+      </el-form>
+    </div>
     
-    <el-table :data="installations" border style="width: 100%" v-loading="loading">
+    <el-table :data="filteredInstallations" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="aircraft_no" label="飞机编号" />
       <el-table-column prop="install_position" label="安装位置">
   <template #default="scope">
@@ -29,6 +39,7 @@
           <el-button type="primary" size="small" @click="openReplaceDialog(scope.row)">更换</el-button>
         </template>
       </el-table-column>
+      <template #empty><el-empty description="暂无数据" /></template>
     </el-table>
 
     <!-- 新增安装弹窗 -->
@@ -152,12 +163,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { getActiveInstallations, getInstallPositions, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
 import { ElMessage } from 'element-plus'
 import { getOperators } from '../api/operators' // 引入接口
-import { formatComponentCategory } from '../utils/businessFormatters'
+import { formatComponentCategory, formatComponentStatus, formatInstallPosition, getComponentStatusType } from '../utils/businessFormatters'
 
 const operatorList = ref([]) // 存下拉框的数据
 const installPositionOptions = ref([])
@@ -181,34 +192,23 @@ onMounted(async () => {
   operatorList.value = res.data || res || []
 })
 
-const componentStatusMap = {
-  in_stock: { label: '在库', type: 'info' },
-  available: { label: '可用', type: 'success' },
-  installed: { label: '已安装', type: 'primary' },
-  removed: { label: '已拆卸', type: 'warning' },
-  under_maintenance: { label: '维修中', type: 'warning' },
-  retired: { label: '已退役', type: 'danger' }
-}
-
-const translateComponentStatus = (status) => componentStatusMap[status]?.label || status
-const getComponentStatusType = (status) => componentStatusMap[status]?.type || 'info'
+const translateComponentStatus = (status) => formatComponentStatus(status)
 
 // 翻译安装位置（用于表格展示）
-const translatePosition = (pos) => {
-  const map = {
-    'left engine position': '左侧发动机',
-    'right engine position': '右侧发动机',
-    'navigation bay': '导航舱',
-    'hydraulic system bay': '液压系统舱',
-    'main landing gear': '主起落架',
-    'nose': '机头雷达罩',
-    'tail': '尾翼'
-  }
-  return map[pos] || pos;
-}
+const translatePosition = (pos) => formatInstallPosition(pos)
 
 const installations = ref([])
 const loading = ref(false)
+const filters = reactive({ aircraftNo: '', componentNo: '', position: '', scope: 'all' })
+const includesText = (value, keyword) => String(value || '').toLowerCase().includes(String(keyword || '').trim().toLowerCase())
+const filteredInstallations = computed(() => installations.value.filter(item => {
+  const isCurrent = !item.uninstall_time
+  return includesText(item.aircraft_no, filters.aircraftNo)
+    && includesText(item.component_no, filters.componentNo)
+    && includesText(`${item.install_position || ''} ${translatePosition(item.install_position)}`, filters.position)
+    && (filters.scope === 'all' || (filters.scope === 'current' ? isCurrent : !isCurrent))
+}))
+const resetFilters = () => Object.assign(filters, { aircraftNo: '', componentNo: '', position: '', scope: 'all' })
 
 const installDialogVisible = ref(false)
 const installForm = ref({

@@ -1,14 +1,23 @@
 <template>
   <div class="app-container">
-    <div class="header-action">
-      <h2>机队管理</h2>
+    <div class="page-header">
+      <div><h2>机队管理</h2><p>查看飞机基础信息与当前安装部件配置</p></div>
       <el-button type="primary" @click="createVisible = true">
         <el-icon><Plus /></el-icon> 新增飞机
       </el-button>
     </div>
 
-    <el-row :gutter="20" v-loading="loading">
-      <el-col :span="8" v-for="ac in aircraftList" :key="ac.aircraft_no" style="margin-bottom: 20px;">
+    <div class="filter-panel">
+      <el-form class="filter-form" inline>
+        <el-form-item label="飞机编号"><el-input v-model="filters.aircraftNo" clearable placeholder="输入飞机编号" style="width: 170px" /></el-form-item>
+        <el-form-item label="机型"><el-input v-model="filters.model" clearable placeholder="输入机型" style="width: 160px" /></el-form-item>
+        <el-form-item label="状态"><el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px"><el-option label="服役中" value="active" /><el-option label="维修中" value="maintenance" /><el-option label="已退役" value="retired" /></el-select></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchList">刷新</el-button></div></el-form-item>
+      </el-form>
+    </div>
+
+    <el-row :gutter="20" v-loading="loading" element-loading-text="正在加载数据...">
+      <el-col :span="8" v-for="ac in filteredAircrafts" :key="ac.aircraft_no" style="margin-bottom: 20px;">
         <el-card shadow="hover" :class="{'is-retired': ac.service_status === 'retired'}">
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -52,13 +61,17 @@
         </el-card>
       </el-col>
     </el-row>
+    <el-empty v-if="!loading && !filteredAircrafts.length" description="暂无数据" />
 
     <el-drawer
       v-model="detailVisible"
-      :title="`飞机详情：${selectedAircraft.aircraft_no || ''}`"
       size="60%"
     >
-      <div v-loading="detailLoading">
+      <template #header>
+        <div class="drawer-heading"><div><small>AIRCRAFT CONFIGURATION</small><h2>{{ selectedAircraft.aircraft_no || '飞机详情' }}</h2></div><el-tag :type="getAircraftStatusType(selectedAircraft.service_status)" effect="dark">{{ formatAircraftStatus(selectedAircraft.service_status) }}</el-tag></div>
+      </template>
+      <div v-loading="detailLoading" element-loading-text="正在加载数据...">
+        <section class="detail-block">
         <div class="detail-section-header">
           <h3>飞机基础信息</h3>
           <el-button type="primary" plain size="small" @click="loadAircraftInstallations">
@@ -74,7 +87,7 @@
             {{ selectedAircraft.aircraft_model || '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="当前状态">
-            <el-tag :type="getStatusType(selectedAircraft.service_status)">
+            <el-tag :type="getAircraftStatusType(selectedAircraft.service_status)">
               {{ formatAircraftStatus(selectedAircraft.service_status) }}
             </el-tag>
           </el-descriptions-item>
@@ -87,9 +100,9 @@
           <el-descriptions-item v-if="selectedAircraft.remark" label="备注" :span="2">
             {{ selectedAircraft.remark }}
           </el-descriptions-item>
-        </el-descriptions>
+        </el-descriptions></section>
 
-        <h3 class="installation-title">当前安装部件</h3>
+        <section class="detail-block"><h3 class="installation-title">当前安装部件</h3>
         <el-alert
           v-if="detailLoadFailed"
           title="飞机部件详情加载失败"
@@ -119,12 +132,12 @@
             <template #default="scope">{{ formatDateTime(scope.row.install_time) }}</template>
           </el-table-column>
           <el-table-column label="当前有效" width="90" align="center">
-            <template #default><el-tag type="success">是</el-tag></template>
+            <template #default><el-tag type="primary">是</el-tag></template>
           </el-table-column>
           <template #empty>
             <el-empty description="暂无当前安装部件" />
           </template>
-        </el-table>
+        </el-table></section>
       </div>
     </el-drawer>
 
@@ -149,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { getAircrafts, createAircraft, updateAircraftStatus } from '../api/aircrafts'
 import { getActiveInstallations } from '../api/installations'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -157,7 +170,9 @@ import {
   formatAircraftStatus,
   formatComponentCategory,
   formatComponentStatus,
-  formatInstallPosition
+  formatInstallPosition,
+  getAircraftStatusType,
+  getComponentStatusType
 } from '../utils/businessFormatters'
 // 引入 Element Plus 的图标
 import { Plus, Position } from '@element-plus/icons-vue'
@@ -175,6 +190,14 @@ const createForm = ref({
   aircraft_model: '',
   start_date: new Date().toISOString().split('T')[0]
 })
+const filters = reactive({ aircraftNo: '', model: '', status: '' })
+const includesText = (value, keyword) => String(value || '').toLowerCase().includes(String(keyword || '').trim().toLowerCase())
+const filteredAircrafts = computed(() => aircraftList.value.filter(item =>
+  includesText(item.aircraft_no, filters.aircraftNo)
+  && includesText(item.aircraft_model, filters.model)
+  && (!filters.status || item.service_status === filters.status)
+))
+const resetFilters = () => Object.assign(filters, { aircraftNo: '', model: '', status: '' })
 
 // 查询机队
 const fetchList = async () => {
@@ -250,25 +273,11 @@ const translateStatus = (status) => {
   return formatAircraftStatus(status)
 }
 
-const getComponentStatusType = (status) => ({
-  in_stock: 'info',
-  available: 'success',
-  installed: 'primary',
-  removed: 'warning',
-  under_maintenance: 'warning',
-  retired: 'danger'
-}[status] || 'info')
-
 const formatDate = (value) => value ? String(value).slice(0, 10) : '未登记'
 const formatDateTime = (value) => value ? String(value).replace('T', ' ').slice(0, 19) : '未登记'
 
 const getStatusType = (status) => {
-  const map = {
-    'active': 'success',
-    'maintenance': 'warning',
-    'retired': 'info'
-  }
-  return map[status] || 'primary'
+  return getAircraftStatusType(status)
 }
 
 onMounted(() => {
@@ -299,7 +308,11 @@ onMounted(() => {
   margin: 0;
 }
 .installation-title {
-  margin-top: 24px;
   margin-bottom: 14px;
 }
+.drawer-heading { width: 100%; display: flex; align-items: center; justify-content: space-between; padding-right: 10px; }
+.drawer-heading small { color: #7d93a5; font-size: 10px; letter-spacing: 1.4px; }
+.drawer-heading h2 { margin: 5px 0 0; color: #123f63; }
+.detail-block { margin-bottom: 18px; padding: 18px; border: 1px solid #e2ecf3; border-radius: 12px; background: #fbfdff; transition: box-shadow .2s ease, transform .2s ease; }
+.detail-block:hover { box-shadow: 0 8px 22px rgba(21, 91, 139, .08); transform: translateY(-1px); }
 </style>

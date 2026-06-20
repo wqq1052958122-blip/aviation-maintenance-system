@@ -5,8 +5,13 @@ const routes = [
   {
     path: '/',
     component: Layout,
-    redirect: '/dashboard',
     children: [
+      {
+        path: '',
+        name: 'Landing',
+        component: () => import('../views/Landing.vue'),
+        meta: { landing: true }
+      },
       {
         path: 'dashboard',
         name: 'Dashboard',
@@ -32,17 +37,18 @@ const routes = [
         name: 'Flights',
         component: () => import('../views/Flights.vue')
       },
-{
-  path: '/aircrafts',
-  name: 'Aircrafts',
-  component: () => import('../views/Aircrafts.vue'),
-  meta: { title: '机队管理', icon: 'Position' } // 如果你的框架支持动态菜单，一般写在这里
-},{
-  path: '/operators',
-  name: 'Operators',
-  component: () => import('../views/Operators.vue'),
-  meta: { title: '人员管理', icon: 'User' } // 如果你的框架支持动态菜单，一般写在这里
-}
+      {
+        path: 'aircrafts',
+        name: 'Aircrafts',
+        component: () => import('../views/Aircrafts.vue'),
+        meta: { title: '机队管理', icon: 'Position' }
+      },
+      {
+        path: 'operators',
+        name: 'Operators',
+        component: () => import('../views/Operators.vue'),
+        meta: { title: '人员管理', icon: 'User' }
+      }
     ]
   }
 ]
