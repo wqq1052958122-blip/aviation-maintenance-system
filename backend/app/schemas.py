@@ -162,6 +162,22 @@ class MaintenancePlanAction(BaseModel):
     }
 
 
+class MaintenancePlanStart(BaseModel):
+    start_time: datetime
+    technician_id: int
+    description: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "start_time": "2025-07-01 09:00:00",
+                "technician_id": 2,
+                "description": "Start execution from scheduled maintenance plan.",
+            }
+        }
+    }
+
+
 class ComponentRetire(BaseModel):
     retirement_time: datetime
     retirement_reason: str

@@ -217,13 +217,15 @@ export const getPlanStatusType = (value) => ({
 export const formatWarningLevel = (value) => ({
   normal: '正常',
   warning: '预警',
-  critical: '严重'
+  critical: '严重',
+  expired: '已到寿'
 }[normalize(value)] || value || '-')
 
 export const getWarningStatusType = (value) => ({
   normal: 'success',
   warning: 'warning',
-  critical: 'danger'
+  critical: 'danger',
+  expired: 'danger'
 }[normalize(value)] || 'info')
 
 export const formatRetirementReason = (value) => retirementReasonMap[normalize(value)] || value || '未填写原因'
@@ -237,10 +239,12 @@ export const formatAuditOperationType = (value) => ({
   maintenance_completion: '完成维修',
   create_maintenance_plan: '创建维修计划',
   maintenance_plan_created: '创建维修计划',
+  maintenance_plan_started: '开始执行维修计划',
   complete_maintenance_plan: '完成维修计划',
   maintenance_plan_completed: '完成维修计划',
   cancel_maintenance_plan: '取消维修计划',
-  maintenance_plan_cancelled: '取消维修计划'
+  maintenance_plan_cancelled: '取消维修计划',
+  life_limit_grounding: '寿命到限停场'
 }[normalize(value)] || value || '未知操作')
 
 export const formatLifecycleEventType = (value) => ({
@@ -260,6 +264,7 @@ export const formatLifecycleEventType = (value) => ({
   retired: '退役',
   retirement: '退役',
   maintenance_plan_created: '维修计划',
+  maintenance_plan_started: '计划开始执行',
   maintenance_plan_completed: '计划完成',
   maintenance_plan_cancelled: '计划取消'
 }[normalize(value)] || value || '其他事件')
@@ -291,11 +296,23 @@ export const formatAuditDetail = (detail) => {
   match = detail.match(/^Created maintenance plan for component (.+?); type: (.+)$/i)
   if (match) return `为部件 ${match[1]} 创建维修计划，类型：${formatPlanType(match[2])}`
 
+  match = detail.match(/^Started maintenance plan for component (.+?); maintenance_id: (\d+); type: (.+)$/i)
+  if (match) return `开始执行部件 ${match[1]} 的维修计划，已创建维修工单 #${match[2]}，类型：${formatPlanType(match[3])}`
+
   match = detail.match(/^Completed maintenance plan for component (.+?); type: (.+)$/i)
   if (match) return `完成部件 ${match[1]} 的维修计划，类型：${formatPlanType(match[2])}`
 
+  match = detail.match(/^Completed maintenance plan for component (.+?); maintenance_id: (\d+); result: (.+)$/i)
+  if (match) return `部件 ${match[1]} 的维修工单 #${match[2]} 已结束，计划自动完成，结果：${formatMaintenanceResult(match[3])}`
+
   match = detail.match(/^Cancelled maintenance plan for component (.+?); type: (.+)$/i)
   if (match) return `取消部件 ${match[1]} 的维修计划，类型：${formatPlanType(match[2])}`
+
+  match = detail.match(/^Created rework plan after failed maintenance for component (.+)$/i)
+  if (match) return `部件 ${match[1]} 维修未通过，已创建返修计划`
+
+  match = detail.match(/^Aircraft moved to maintenance after flight (.+?) because an installed component reached design life$/i)
+  if (match) return `飞行任务 ${match[1]} 完成后发现安装部件达到寿命上限，飞机已转入维修状态`
 
   return formatBusinessText(detail)
 }

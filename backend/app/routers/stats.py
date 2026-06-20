@@ -168,3 +168,30 @@ def get_db_integrity_checks(db: Session = Depends(get_db)):
         })
     except SQLAlchemyError as exc:
         raise_db_error(exc, db)
+
+
+@router.get("/stats/component-maintenance-interval", summary="查询部件维修间隔分析", response_model=dict, responses=SUCCESS_RESPONSE)
+def get_component_maintenance_interval(db: Session = Depends(get_db)):
+    try:
+        rows = db.execute(text("SELECT * FROM v_component_maintenance_interval ORDER BY component_no, end_time DESC")).mappings().all()
+        return ok([dict(row) for row in rows])
+    except SQLAlchemyError as exc:
+        raise_db_error(exc, db)
+
+
+@router.get("/stats/aircraft-component-replacements", summary="查询飞机部件更换频率", response_model=dict, responses=SUCCESS_RESPONSE)
+def get_aircraft_component_replacements(db: Session = Depends(get_db)):
+    try:
+        rows = db.execute(text("SELECT * FROM v_aircraft_component_replacement_stats ORDER BY replacement_count DESC, aircraft_no, install_position")).mappings().all()
+        return ok([dict(row) for row in rows])
+    except SQLAlchemyError as exc:
+        raise_db_error(exc, db)
+
+
+@router.get("/stats/component-maintenance-due", summary="查询部件周期维修预警", response_model=dict, responses=SUCCESS_RESPONSE)
+def get_component_maintenance_due(db: Session = Depends(get_db)):
+    try:
+        rows = db.execute(text("SELECT * FROM v_component_maintenance_due ORDER BY maintenance_usage_ratio DESC, component_no")).mappings().all()
+        return ok([dict(row) for row in rows])
+    except SQLAlchemyError as exc:
+        raise_db_error(exc, db)

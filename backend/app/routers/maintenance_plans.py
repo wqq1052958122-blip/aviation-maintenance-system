@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.openapi_docs import SUCCESS_RESPONSE
-from app.schemas import MaintenancePlanAction, MaintenancePlanCreate
+from app.schemas import MaintenancePlanAction, MaintenancePlanCreate, MaintenancePlanStart
 from app.utils.db_errors import raise_db_error
 from app.utils.responses import ok
 
@@ -29,9 +29,17 @@ def lock_pending_plan(db: Session, plan_id: int):
     plan = db.execute(
         text(
             """
-            SELECT mp.plan_id, mp.status, mp.planned_type, c.component_no
+            SELECT
+                mp.plan_id,
+                mp.status,
+                mp.planned_type,
+                mp.related_maintenance_id,
+                mr.result AS related_maintenance_result,
+                c.component_no
             FROM MaintenancePlan mp
             JOIN Component c ON mp.component_id = c.component_id
+            LEFT JOIN MaintenanceRecord mr
+                ON mp.related_maintenance_id = mr.maintenance_id
             WHERE mp.plan_id = :plan_id
             FOR UPDATE
             """
@@ -53,8 +61,8 @@ def lock_pending_plan(db: Session, plan_id: int):
 
 @router.get(
     "/maintenance-plans",
-    summary="查询待执行维修计划",
-    description="优先查询视图 v_pending_maintenance_plan，按计划时间返回待执行维修计划。",
+    summary="查询维修计划",
+    description="查询视图 v_maintenance_plan_detail，返回待执行、已完成和已取消的全部维修计划。",
     response_model=dict,
     responses=SUCCESS_RESPONSE,
 )
@@ -64,12 +72,67 @@ def list_maintenance_plans(db: Session = Depends(get_db)):
             text(
                 """
                 SELECT *
-                FROM v_pending_maintenance_plan
-                ORDER BY planned_time ASC, plan_id ASC
+                FROM v_maintenance_plan_detail
+                ORDER BY
+                    CASE status WHEN 'pending' THEN 0 ELSE 1 END,
+                    planned_time DESC,
+                    plan_id DESC
                 """
             )
         ).mappings().all()
         return ok([dict(row) for row in rows])
+    except SQLAlchemyError as exc:
+        raise_db_error(exc, db)
+
+
+@router.post(
+    "/maintenance-plans/{plan_id}/start",
+    summary="开始执行维修计划",
+    description=(
+        "调用 sp_start_maintenance_plan，在同一事务中锁定计划、创建 pending 维修工单、"
+        "关联 related_maintenance_id 并写入 AuditLog。"
+    ),
+    response_model=dict,
+    responses=SUCCESS_RESPONSE,
+)
+def start_maintenance_plan(
+    plan_id: int,
+    payload: MaintenancePlanStart,
+    db: Session = Depends(get_db),
+):
+    try:
+        db.execute(
+            text(
+                """
+                CALL sp_start_maintenance_plan(
+                    :plan_id,
+                    :start_time,
+                    :technician_id,
+                    :description
+                )
+                """
+            ),
+            {"plan_id": plan_id, **payload.model_dump()},
+        )
+        db.commit()
+        maintenance_id = db.execute(
+            text(
+                """
+                SELECT related_maintenance_id
+                FROM MaintenancePlan
+                WHERE plan_id = :plan_id
+                """
+            ),
+            {"plan_id": plan_id},
+        ).scalar_one()
+        return ok(
+            {
+                "plan_id": plan_id,
+                "status": "pending",
+                "execution_status": "in_progress",
+                "maintenance_id": int(maintenance_id),
+            }
+        )
     except SQLAlchemyError as exc:
         raise_db_error(exc, db)
 
@@ -85,6 +148,11 @@ def create_maintenance_plan(
     payload: MaintenancePlanCreate,
     db: Session = Depends(get_db),
 ):
+    if payload.related_maintenance_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Create the plan first, then use the start endpoint to create its maintenance record.",
+        )
     component_id = get_component_id(db, payload.component_no)
     params = payload.model_dump()
     params["component_id"] = component_id
@@ -131,7 +199,7 @@ def create_maintenance_plan(
 @router.post(
     "/maintenance-plans/{plan_id}/complete",
     summary="完成维修计划",
-    description="仅 pending 计划可完成；更新完成时间并在同一事务内写入 AuditLog。",
+    description="兼容入口：仅关联工单已经结束的 pending 计划可完成。正常流程由维修完成事务自动完成计划。",
     response_model=dict,
     responses=SUCCESS_RESPONSE,
 )
@@ -143,22 +211,27 @@ def complete_maintenance_plan(
     action = payload or MaintenancePlanAction()
     try:
         plan = lock_pending_plan(db, plan_id)
+        if plan["related_maintenance_id"] is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Maintenance plan must be started before it can be completed.",
+            )
+        if plan["related_maintenance_result"] == "pending":
+            raise HTTPException(
+                status_code=400,
+                detail="Related maintenance record must be completed first.",
+            )
         db.execute(
             text(
                 """
                 UPDATE MaintenancePlan
                 SET status = 'completed',
-                    completed_at = NOW(),
-                    related_maintenance_id = COALESCE(
-                        :related_maintenance_id,
-                        related_maintenance_id
-                    )
+                    completed_at = NOW()
                 WHERE plan_id = :plan_id
                 """
             ),
             {
                 "plan_id": plan_id,
-                "related_maintenance_id": action.related_maintenance_id,
             },
         )
         db.execute(
@@ -204,6 +277,11 @@ def cancel_maintenance_plan(
     action = payload or MaintenancePlanAction()
     try:
         plan = lock_pending_plan(db, plan_id)
+        if plan["related_maintenance_id"] is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Started maintenance plan cannot be cancelled.",
+            )
         db.execute(
             text(
                 """

@@ -6,6 +6,9 @@
 USE aviation_maintenance;
 
 DROP VIEW IF EXISTS v_component_full_timeline;
+DROP VIEW IF EXISTS v_component_maintenance_due;
+DROP VIEW IF EXISTS v_aircraft_component_replacement_stats;
+DROP VIEW IF EXISTS v_component_maintenance_interval;
 DROP VIEW IF EXISTS v_pending_maintenance_plan;
 DROP VIEW IF EXISTS v_maintenance_plan_detail;
 DROP VIEW IF EXISTS v_audit_log_detail;
@@ -140,6 +143,124 @@ JOIN Component c ON cm.model_id = c.model_id
 LEFT JOIN MaintenanceRecord mr ON c.component_id = mr.component_id
 GROUP BY cm.model_code, cm.category;
 
+-- 已完成维修之间的间隔，用于分析部件与型号的维修可靠性。
+CREATE VIEW v_component_maintenance_interval AS
+SELECT
+    history.maintenance_id,
+    c.component_no,
+    cm.model_code,
+    cm.category,
+    history.maintenance_type,
+    history.start_time,
+    history.end_time,
+    history.result,
+    history.previous_maintenance_end_time,
+    CASE
+        WHEN history.previous_maintenance_end_time IS NULL THEN NULL
+        ELSE TIMESTAMPDIFF(
+            HOUR,
+            history.previous_maintenance_end_time,
+            history.start_time
+        )
+    END AS maintenance_interval_hours
+FROM (
+    SELECT
+        mr.*,
+        LAG(mr.end_time) OVER (
+            PARTITION BY mr.component_id
+            ORDER BY mr.end_time, mr.maintenance_id
+        ) AS previous_maintenance_end_time
+    FROM MaintenanceRecord mr
+    WHERE mr.end_time IS NOT NULL
+) history
+JOIN Component c ON history.component_id = c.component_id
+JOIN ComponentModel cm ON c.model_id = cm.model_id;
+
+-- 按飞机与安装位置统计历史安装次数和可解释的部件更换次数。
+CREATE VIEW v_aircraft_component_replacement_stats AS
+SELECT
+    a.aircraft_no,
+    a.aircraft_model,
+    ir.position_id,
+    ir.install_position,
+    aip.position_name,
+    aip.allowed_category AS category,
+    COUNT(*) AS installation_count,
+    SUM(CASE WHEN ir.uninstall_time IS NOT NULL THEN 1 ELSE 0 END) AS removal_count,
+    GREATEST(COUNT(*) - 1, 0) AS replacement_count,
+    MIN(ir.install_time) AS first_install_time,
+    MAX(ir.install_time) AS latest_install_time
+FROM InstallationRecord ir
+JOIN Aircraft a ON ir.aircraft_id = a.aircraft_id
+JOIN AircraftInstallPosition aip ON ir.position_id = aip.position_id
+GROUP BY
+    a.aircraft_no,
+    a.aircraft_model,
+    ir.position_id,
+    ir.install_position,
+    aip.position_name,
+    aip.allowed_category;
+
+-- 基于上一次通过维修后的实际飞行小时计算下一次周期维修到期程度。
+CREATE VIEW v_component_maintenance_due AS
+WITH last_passed_maintenance AS (
+    SELECT
+        component_id,
+        MAX(end_time) AS last_passed_maintenance_time
+    FROM MaintenanceRecord
+    WHERE result = 'passed'
+      AND end_time IS NOT NULL
+    GROUP BY component_id
+),
+hours_since_maintenance AS (
+    SELECT
+        c.component_id,
+        COALESCE(SUM(fl.flight_hours), 0) AS hours_since_last_maintenance
+    FROM Component c
+    LEFT JOIN last_passed_maintenance lpm
+        ON c.component_id = lpm.component_id
+    LEFT JOIN InstallationRecord ir
+        ON c.component_id = ir.component_id
+    LEFT JOIN FlightLog fl
+        ON fl.aircraft_id = ir.aircraft_id
+       AND fl.takeoff_time >= ir.install_time
+       AND (ir.uninstall_time IS NULL OR fl.landing_time <= ir.uninstall_time)
+       AND (
+           lpm.last_passed_maintenance_time IS NULL
+           OR fl.takeoff_time >= lpm.last_passed_maintenance_time
+       )
+    GROUP BY c.component_id
+)
+SELECT
+    c.component_no,
+    cm.model_code,
+    cm.category,
+    cm.maintenance_cycle_hours,
+    lpm.last_passed_maintenance_time,
+    ROUND(COALESCE(hsm.hours_since_last_maintenance, 0), 2) AS hours_since_last_maintenance,
+    ROUND(
+        GREATEST(
+            cm.maintenance_cycle_hours - COALESCE(hsm.hours_since_last_maintenance, 0),
+            0
+        ),
+        2
+    ) AS remaining_maintenance_hours,
+    ROUND(
+        COALESCE(hsm.hours_since_last_maintenance, 0) / cm.maintenance_cycle_hours,
+        4
+    ) AS maintenance_usage_ratio,
+    CASE
+        WHEN COALESCE(hsm.hours_since_last_maintenance, 0) >= cm.maintenance_cycle_hours THEN 'overdue'
+        WHEN COALESCE(hsm.hours_since_last_maintenance, 0) / cm.maintenance_cycle_hours >= 0.9 THEN 'due'
+        WHEN COALESCE(hsm.hours_since_last_maintenance, 0) / cm.maintenance_cycle_hours >= 0.7 THEN 'warning'
+        ELSE 'normal'
+    END AS maintenance_due_level
+FROM Component c
+JOIN ComponentModel cm ON c.model_id = cm.model_id
+LEFT JOIN last_passed_maintenance lpm ON c.component_id = lpm.component_id
+LEFT JOIN hours_since_maintenance hsm ON c.component_id = hsm.component_id
+WHERE c.is_retired = FALSE;
+
 -- 寿命预警只依赖 v_component_flight_usage 的推导值，
 -- 不依赖可能未同步的 Component.total_flight_hours。
 CREATE VIEW v_component_life_warning AS
@@ -152,6 +273,7 @@ SELECT
     ROUND(GREATEST(cm.design_life_hours - COALESCE(usage_stats.used_hours, 0), 0), 2) AS remaining_life_hours,
     ROUND(COALESCE(usage_stats.used_hours, 0) / cm.design_life_hours, 4) AS life_usage_ratio,
     CASE
+        WHEN COALESCE(usage_stats.used_hours, 0) / cm.design_life_hours >= 1.0 THEN 'expired'
         WHEN COALESCE(usage_stats.used_hours, 0) / cm.design_life_hours >= 0.9 THEN 'critical'
         WHEN COALESCE(usage_stats.used_hours, 0) / cm.design_life_hours >= 0.7 THEN 'warning'
         ELSE 'normal'
@@ -332,6 +454,9 @@ SELECT * FROM v_component_profile ORDER BY component_no;
 SELECT component_no, event_time, event_type, event_detail FROM v_component_lifecycle WHERE component_no IN ('HYD-001', 'ENG-001') ORDER BY component_no, event_time;
 SELECT * FROM v_component_flight_usage WHERE component_no IN ('ENG-001', 'ENG-002', 'HYD-001') ORDER BY component_no, aircraft_no;
 SELECT * FROM v_model_maintenance_stats ORDER BY maintenance_count DESC;
+SELECT * FROM v_component_maintenance_interval ORDER BY component_no, end_time;
+SELECT * FROM v_aircraft_component_replacement_stats ORDER BY replacement_count DESC, aircraft_no, install_position;
+SELECT * FROM v_component_maintenance_due ORDER BY maintenance_usage_ratio DESC, component_no;
 SELECT * FROM v_component_life_warning ORDER BY life_usage_ratio DESC, component_no;
 SELECT * FROM v_retirement_reason_stats ORDER BY retirement_count DESC, retirement_reason;
 SELECT * FROM v_audit_log_detail ORDER BY operation_time DESC, audit_id DESC;

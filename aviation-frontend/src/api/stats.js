@@ -24,3 +24,15 @@ export function getRetirementReasonStats() {
 export function getDbIntegrityChecks() {
   return request.get('/stats/db-integrity-checks')
 }
+
+export function getComponentMaintenanceInterval() {
+  return request.get('/stats/component-maintenance-interval')
+}
+
+export function getAircraftComponentReplacements() {
+  return request.get('/stats/aircraft-component-replacements')
+}
+
+export function getComponentMaintenanceDue() {
+  return request.get('/stats/component-maintenance-due')
+}

@@ -5,6 +5,13 @@
       <el-button type="primary" @click="openCreateDialog">新增维修工单</el-button>
     </div>
 
+    <div class="section-header">
+      <div>
+        <h3>维修工单与执行记录</h3>
+        <p>记录已经开始或完成的实际维修过程与维修结论</p>
+      </div>
+    </div>
+
     <div class="filter-panel">
       <el-form class="filter-form" inline>
         <el-form-item label="部件编号"><el-input v-model="searchComponentNo" clearable placeholder="输入部件编号" style="width: 170px" @keyup.enter="handleSearch" /></el-form-item>
@@ -15,7 +22,7 @@
       </el-form>
     </div>
 
-    <el-table :data="filteredRecords" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
+    <el-table :data="pagedRecords" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="maintenance_id" label="工单号" width="80" />
 
   <el-table-column prop="component_no" label="维修部件编号" width="150" />
@@ -55,12 +62,21 @@
       </el-table-column>
       <template #empty><el-empty description="暂无数据" /></template>
     </el-table>
+    <ListPagination v-model:page="maintenancePage" v-model:page-size="maintenancePageSize" :total="filteredRecords.length" />
 
     <el-divider />
 
     <div class="section-header">
-      <h3>维修计划</h3>
-      <el-button type="primary" @click="openPlanDialog">新增维修计划</el-button>
+      <div>
+        <h3>维修计划与待办</h3>
+        <p>安排未来维修任务，计划完成不等同于维修工单完成</p>
+      </div>
+      <div class="section-actions">
+        <el-select v-model="planActionOperatorId" clearable placeholder="取消操作人员" style="width: 180px">
+          <el-option v-for="op in operatorList" :key="op.operator_id" :label="op.operator_name" :value="op.operator_id" />
+        </el-select>
+        <el-button type="primary" @click="openPlanDialog">新增维修计划</el-button>
+      </div>
     </div>
 
     <div class="filter-panel">
@@ -69,7 +85,7 @@
         <el-form-item label="计划状态"><el-select v-model="planFilters.status" clearable placeholder="全部状态" style="width: 140px"><el-option label="待执行" value="pending" /><el-option label="已完成" value="completed" /><el-option label="已取消" value="cancelled" /></el-select></el-form-item>
         <el-form-item label="计划类型"><el-select v-model="planFilters.type" clearable placeholder="全部类型" style="width: 160px"><el-option label="计划检查" value="scheduled_inspection" /><el-option label="预防性维修" value="preventive_maintenance" /><el-option label="寿命限制检查" value="life_limit_check" /><el-option label="更换后检查" value="post_replacement_check" /><el-option label="在线检查" value="online inspection" /><el-option label="例行检查" value="routine inspection" /><el-option label="计划维修" value="scheduled maintenance" /><el-option label="维修" value="repair" /><el-option label="更换检查" value="replacement check" /><el-option label="寿命预警检查" value="life warning inspection" /></el-select></el-form-item>
         <el-form-item label="计划时间"><el-date-picker v-model="planFilters.dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" /></el-form-item>
-        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetPlanFilters">重置</el-button><el-button @click="fetchPlanList">刷新</el-button></div></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary" @click="applyPlanFilters">搜索</el-button><el-button @click="resetPlanFilters">重置</el-button><el-button @click="fetchPlanList">刷新</el-button></div></el-form-item>
       </el-form>
     </div>
 
@@ -81,7 +97,7 @@
       show-icon
       style="margin-bottom: 12px;"
     />
-    <el-table v-else :data="filteredPlans" border style="width: 100%" v-loading="planLoading" element-loading-text="正在加载数据...">
+    <el-table v-else :data="pagedPlans" border style="width: 100%" v-loading="planLoading" element-loading-text="正在加载数据...">
       <el-table-column prop="component_no" label="部件编号" min-width="110" />
       <el-table-column label="计划类型" min-width="120">
         <template #default="scope">{{ formatPlanType(scope.row.planned_type) }}</template>
@@ -94,9 +110,14 @@
       </el-table-column>
       <el-table-column label="状态" min-width="90">
         <template #default="scope">
-          <el-tag :type="getPlanStatusType(scope.row.status)">
-            {{ formatPlanStatus(scope.row.status) }}
+          <el-tag :type="scope.row.status === 'pending' && scope.row.related_maintenance_id ? 'primary' : getPlanStatusType(scope.row.status)">
+            {{ scope.row.status === 'pending' && scope.row.related_maintenance_id ? '执行中' : formatPlanStatus(scope.row.status) }}
           </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="关联工单" min-width="105">
+        <template #default="scope">
+          {{ scope.row.related_maintenance_id ? `#${scope.row.related_maintenance_id}` : '尚未开始' }}
         </template>
       </el-table-column>
       <el-table-column label="创建人" min-width="110">
@@ -105,12 +126,13 @@
       <el-table-column label="创建时间" min-width="160">
         <template #default="scope">{{ formatTime(scope.row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="190" fixed="right">
         <template #default="scope">
-          <template v-if="scope.row.status === 'pending'">
-            <el-button type="success" link @click="handleCompletePlan(scope.row)">完成</el-button>
+          <template v-if="scope.row.status === 'pending' && !scope.row.related_maintenance_id">
+            <el-button type="primary" link @click="openStartPlanDialog(scope.row)">开始执行</el-button>
             <el-button type="danger" link @click="handleCancelPlan(scope.row)">取消</el-button>
           </template>
+          <span v-else-if="scope.row.status === 'pending'">等待工单完成</span>
           <span v-else>-</span>
         </template>
       </el-table-column>
@@ -118,6 +140,46 @@
         <el-empty description="暂无维修计划" />
       </template>
     </el-table>
+    <ListPagination v-if="!planLoadFailed" v-model:page="planPage" v-model:page-size="planPageSize" :total="filteredPlans.length" />
+
+
+    <el-dialog title="开始执行维修计划" v-model="startPlanVisible" width="500px">
+      <el-form :model="startPlanForm" label-width="110px">
+        <div class="form-section-title">计划执行信息</div>
+        <el-form-item label="部件编号">
+          <el-input :model-value="startPlanForm.component_no" disabled />
+        </el-form-item>
+        <el-form-item label="维修类型">
+          <el-input :model-value="formatPlanType(startPlanForm.planned_type)" disabled />
+        </el-form-item>
+        <el-form-item label="维修技师" required>
+          <el-select v-model="startPlanForm.technician_id" placeholder="请选择维修技师" style="width: 100%">
+            <el-option
+              v-for="op in operatorList.filter(o => o.role === 'technician')"
+              :key="op.operator_id"
+              :label="op.operator_name + '（' + translateRole(op.role) + '）'"
+              :value="op.operator_id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="开始时间" required>
+          <el-date-picker
+            v-model="startPlanForm.start_time"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="请选择实际开始时间"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="执行说明">
+          <el-input v-model="startPlanForm.description" type="textarea" placeholder="填写本次执行说明" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="startPlanVisible = false">取消</el-button>
+        <el-button type="primary" :loading="planSubmitting" @click="submitStartPlan">创建维修工单</el-button>
+      </template>
+    </el-dialog>
 
 
     <el-dialog title="新增维修计划" v-model="planDialogVisible" width="520px">
@@ -150,7 +212,7 @@
         <el-form-item label="计划原因">
           <el-input v-model="planForm.planned_reason" type="textarea" placeholder="填写计划原因" />
         </el-form-item>
-        <div class="form-section-title">责任与关联信息</div>
+        <div class="form-section-title">责任信息</div>
         <el-form-item label="创建人">
           <el-select v-model="planForm.created_by" clearable placeholder="请选择创建人" style="width: 100%">
             <el-option
@@ -161,19 +223,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="关联维修记录 ID">
-          <el-input-number
-            v-model="planForm.related_maintenance_id"
-            :min="1"
-            :controls="false"
-            placeholder="可选"
-            style="width: 100%"
-          />
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="planDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitPlan">提交</el-button>
+        <el-button type="primary" :loading="planSubmitting" @click="submitPlan">提交</el-button>
       </template>
     </el-dialog>
 
@@ -216,7 +269,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitCreate">提交</el-button>
+        <el-button type="primary" :loading="maintenanceSubmitting" @click="submitCreate">提交</el-button>
       </template>
     </el-dialog>
 
@@ -224,9 +277,9 @@
       <el-form :model="completeForm" label-width="100px">
         <el-form-item label="检验结果" required>
           <el-select v-model="completeForm.result" style="width: 100%">
-            <el-option label="检验通过（恢复可用）" value="passed" />
-            <el-option label="检验未通过（继续拆卸状态）" value="failed" />
-            <el-option label="彻底报废（退役）" value="scrapped" />
+            <el-option label="检验通过" value="passed" />
+            <el-option label="检验未通过（进入返修流程）" value="failed" />
+            <el-option label="确认报废（安装中部件须先拆卸）" value="scrapped" />
           </el-select>
         </el-form-item>
         <el-form-item label="维修总结">
@@ -258,14 +311,14 @@
       </el-form>
       <template #footer>
         <el-button @click="completeVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitComplete">提交</el-button>
+        <el-button type="primary" :loading="maintenanceSubmitting" @click="submitComplete">提交</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 // 确保你引入了下面这两个接口
 import {
   getAllMaintenances,
@@ -274,11 +327,11 @@ import {
   completeMaintenance,
   getMaintenancePlans,
   createMaintenancePlan,
-  completeMaintenancePlan,
+  startMaintenancePlan,
   cancelMaintenancePlan
 } from '../api/maintenances'
 import { getOperators } from '../api/operators' // 引入获取人员的接口
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   formatBusinessText,
   formatMaintenanceResult,
@@ -288,16 +341,26 @@ import {
   formatPlanStatus,
   formatPlanType
 } from '../utils/businessFormatters'
+import { formatLocalDateTime } from '../utils/dateTime'
+import ListPagination from '../components/ListPagination.vue'
 
 const operatorList = ref([]) // 存储从后端拉取的人员名单
 const records = ref([])
 const searchComponentNo = ref('')
 const loading = ref(false)
+const maintenanceSubmitting = ref(false)
 const planList = ref([])
+const planActionOperatorId = ref(null)
 const planLoading = ref(false)
 const planLoadFailed = ref(false)
+const planSubmitting = ref(false)
 const maintenanceFilters = reactive({ type: '', result: '', dateRange: [] })
 const planFilters = reactive({ componentNo: '', status: '', type: '', dateRange: [] })
+const appliedPlanFilters = reactive({ ...planFilters })
+const maintenancePage = ref(1)
+const maintenancePageSize = ref(10)
+const planPage = ref(1)
+const planPageSize = ref(10)
 const inDateRange = (value, range) => {
   if (!range?.length) return true
   const date = String(value || '').slice(0, 10)
@@ -309,18 +372,46 @@ const filteredRecords = computed(() => records.value.filter(item =>
   && (!maintenanceFilters.result || item.result === maintenanceFilters.result)
   && inDateRange(item.start_time, maintenanceFilters.dateRange)
 ))
+const pagedRecords = computed(() => {
+  const start = (maintenancePage.value - 1) * maintenancePageSize.value
+  return filteredRecords.value.slice(start, start + maintenancePageSize.value)
+})
+watch(() => filteredRecords.value.length, total => {
+  maintenancePage.value = Math.min(maintenancePage.value, Math.max(1, Math.ceil(total / maintenancePageSize.value)))
+})
 const filteredPlans = computed(() => planList.value.filter(item =>
-  String(item.component_no || '').toLowerCase().includes(planFilters.componentNo.trim().toLowerCase())
-  && (!planFilters.status || item.status === planFilters.status)
-  && (!planFilters.type || item.planned_type === planFilters.type)
-  && inDateRange(item.planned_time, planFilters.dateRange)
+  String(item.component_no || '').toLowerCase().includes(appliedPlanFilters.componentNo.trim().toLowerCase())
+  && (!appliedPlanFilters.status || item.status === appliedPlanFilters.status)
+  && (!appliedPlanFilters.type || normalizePlanType(item.planned_type) === normalizePlanType(appliedPlanFilters.type))
+  && inDateRange(item.planned_time, appliedPlanFilters.dateRange)
 ))
+const pagedPlans = computed(() => {
+  const start = (planPage.value - 1) * planPageSize.value
+  return filteredPlans.value.slice(start, start + planPageSize.value)
+})
+watch(() => filteredPlans.value.length, total => {
+  planPage.value = Math.min(planPage.value, Math.max(1, Math.ceil(total / planPageSize.value)))
+})
+watch([
+  () => maintenanceFilters.type,
+  () => maintenanceFilters.result,
+  () => maintenanceFilters.dateRange
+], () => { maintenancePage.value = 1 }, { deep: true })
+const normalizePlanType = (value) => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
 const resetMaintenanceFilters = () => {
   searchComponentNo.value = ''
   Object.assign(maintenanceFilters, { type: '', result: '', dateRange: [] })
+  maintenancePage.value = 1
   fetchAllList()
 }
-const resetPlanFilters = () => Object.assign(planFilters, { componentNo: '', status: '', type: '', dateRange: [] })
+const applyPlanFilters = () => {
+  Object.assign(appliedPlanFilters, { ...planFilters, dateRange: [...(planFilters.dateRange || [])] })
+  planPage.value = 1
+}
+const resetPlanFilters = () => {
+  Object.assign(planFilters, { componentNo: '', status: '', type: '', dateRange: [] })
+  applyPlanFilters()
+}
 
 const translateRole = (role) => ({
   technician: '维修技师',
@@ -359,6 +450,7 @@ const fetchPlanList = async () => {
 
 
 const handleSearch = async () => {
+  maintenancePage.value = 1
   if (!searchComponentNo.value) {
     return fetchAllList() // 如果搜索框为空，直接看大盘
   }
@@ -391,15 +483,16 @@ onMounted(async () => {
 // === 维修计划逻辑 ===
 const planDialogVisible = ref(false)
 const planForm = ref({})
+const startPlanVisible = ref(false)
+const startPlanForm = ref({})
 
 const openPlanDialog = () => {
   planForm.value = {
     component_no: searchComponentNo.value,
     planned_type: 'scheduled inspection',
-    planned_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    planned_time: formatLocalDateTime(),
     planned_reason: '',
-    created_by: null,
-    related_maintenance_id: null
+    created_by: null
   }
   planDialogVisible.value = true
 }
@@ -408,25 +501,54 @@ const submitPlan = async () => {
   if (!planForm.value.component_no || !planForm.value.planned_type || !planForm.value.planned_time) {
     return ElMessage.warning('请填写完整的维修计划信息')
   }
+  if (planSubmitting.value) return
+  planSubmitting.value = true
   try {
     await createMaintenancePlan(planForm.value)
     ElMessage.success('维修计划创建成功')
     planDialogVisible.value = false
     fetchPlanList()
-  } catch {}
+  } catch {} finally {
+    planSubmitting.value = false
+  }
 }
 
-const handleCompletePlan = async (row) => {
+const openStartPlanDialog = (row) => {
+  startPlanForm.value = {
+    plan_id: row.plan_id,
+    component_no: row.component_no,
+    planned_type: row.planned_type,
+    start_time: formatLocalDateTime(),
+    technician_id: getDefaultOperatorId('technician'),
+    description: row.planned_reason || ''
+  }
+  startPlanVisible.value = true
+}
+
+const submitStartPlan = async () => {
+  if (!startPlanForm.value.technician_id) return ElMessage.warning('请选择维修技师')
+  if (!startPlanForm.value.start_time) return ElMessage.warning('请选择实际开始时间')
+  if (planSubmitting.value) return
+  planSubmitting.value = true
   try {
-    await completeMaintenancePlan(row.plan_id, { operator_id: row.created_by || null })
-    ElMessage.success('维修计划已完成')
-    fetchPlanList()
-  } catch {}
+    await startMaintenancePlan(startPlanForm.value.plan_id, {
+      start_time: startPlanForm.value.start_time,
+      technician_id: startPlanForm.value.technician_id,
+      description: startPlanForm.value.description
+    })
+    ElMessage.success('维修计划已开始执行，关联维修工单已创建')
+    startPlanVisible.value = false
+    await Promise.all([fetchPlanList(), fetchAllList()])
+  } catch {} finally {
+    planSubmitting.value = false
+  }
 }
 
 const handleCancelPlan = async (row) => {
+  if (!planActionOperatorId.value) return ElMessage.warning('请选择本次计划操作人员')
   try {
-    await cancelMaintenancePlan(row.plan_id, { operator_id: row.created_by || null })
+    await ElMessageBox.confirm(`确定取消部件 ${row.component_no} 的维修计划吗？`, '取消计划确认', { type: 'warning' })
+    await cancelMaintenancePlan(row.plan_id, { operator_id: planActionOperatorId.value })
     ElMessage.success('维修计划已取消')
     fetchPlanList()
   } catch {}
@@ -443,7 +565,7 @@ const openCreateDialog = () => {
   createForm.value = {
     component_no: searchComponentNo.value, // 默认带入当前搜索的部件
     maintenance_type: 'routine',
-    start_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    start_time: formatLocalDateTime(),
     description: '',
     technician_id: getDefaultOperatorId('technician')
   }
@@ -453,6 +575,8 @@ const openCreateDialog = () => {
 const submitCreate = async () => {
   if (!createForm.value.component_no) return ElMessage.error('部件编号必填')
   if (!createForm.value.technician_id) return ElMessage.error('请选择维修技师')
+  if (maintenanceSubmitting.value) return
+  maintenanceSubmitting.value = true
   try {
     await createMaintenance(createForm.value)
     ElMessage.success('工单创建成功！')
@@ -460,7 +584,9 @@ const submitCreate = async () => {
     // 创建成功后自动查询该部件的记录
     searchComponentNo.value = createForm.value.component_no
     handleSearch()
-  } catch {}
+  } catch {} finally {
+    maintenanceSubmitting.value = false
+  }
 }
 
 // === 完成维修逻辑 ===
@@ -471,7 +597,7 @@ const openCompleteDialog = (row) => {
   completeForm.value = {
     maintenance_id: row.maintenance_id,
     component_no: searchComponentNo.value, // 用于刷新列表
-    end_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    end_time: formatLocalDateTime(),
     result: 'passed',
     description: '',
     approved_by: getDefaultOperatorId('approver'),
@@ -485,12 +611,16 @@ const submitComplete = async () => {
     return ElMessage.error('选择报废时必须填写退役原因！')
   }
   if (!completeForm.value.approved_by) return ElMessage.error('请选择审批主管')
+  if (maintenanceSubmitting.value) return
+  maintenanceSubmitting.value = true
   try {
     await completeMaintenance(completeForm.value.maintenance_id, completeForm.value)
     ElMessage.success('维修结果提报成功！部件状态已同步流转。')
     completeVisible.value = false
-    handleSearch() // 刷新列表，看到状态变成 passed/failed
-  } catch {}
+    await Promise.all([handleSearch(), fetchPlanList()])
+  } catch {} finally {
+    maintenanceSubmitting.value = false
+  }
 }
 </script>
 
@@ -503,6 +633,11 @@ const submitComplete = async () => {
 }
 .section-header h3 {
   margin: 0;
+}
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .form-section-title {
   margin: 4px 0 16px;

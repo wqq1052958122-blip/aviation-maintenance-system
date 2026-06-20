@@ -33,7 +33,29 @@ def get_component_id(db: Session, component_no: str) -> int:
     responses=SUCCESS_RESPONSE,
 )
 def list_components(db: Session = Depends(get_db)):
-    rows = db.execute(text("SELECT * FROM Component ORDER BY component_id")).mappings().all()
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                c.component_id,
+                c.component_no,
+                c.model_id,
+                c.batch_no,
+                c.production_date,
+                c.stock_in_time,
+                c.status,
+                COALESCE(fu.calculated_total_flight_hours, 0) AS total_flight_hours,
+                c.is_retired
+            FROM Component c
+            LEFT JOIN (
+                SELECT component_no, SUM(calculated_total_flight_hours) AS calculated_total_flight_hours
+                FROM v_component_flight_usage
+                GROUP BY component_no
+            ) fu ON fu.component_no = c.component_no
+            ORDER BY c.component_id
+            """
+        )
+    ).mappings().all()
     return ok([dict(row) for row in rows])
 
 

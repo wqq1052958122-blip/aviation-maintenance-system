@@ -8,6 +8,8 @@ DELIMITER $$
 
 DROP TRIGGER IF EXISTS trg_before_insert_installation$$
 DROP TRIGGER IF EXISTS trg_before_update_component_status$$
+DROP TRIGGER IF EXISTS trg_before_update_aircraft_status$$
+DROP TRIGGER IF EXISTS trg_before_insert_maintenance_plan$$
 DROP TRIGGER IF EXISTS trg_before_update_maintenance_plan$$
 DROP TRIGGER IF EXISTS trg_after_insert_installation$$
 DROP TRIGGER IF EXISTS trg_before_update_installation$$
@@ -27,6 +29,9 @@ DROP TRIGGER IF EXISTS trg_before_delete_retirement$$
 DROP TRIGGER IF EXISTS trg_before_delete_maintenance_plan$$
 DROP TRIGGER IF EXISTS trg_before_delete_audit_log$$
 DROP TRIGGER IF EXISTS trg_before_delete_operator$$
+DROP TRIGGER IF EXISTS trg_before_insert_flight$$
+DROP TRIGGER IF EXISTS trg_after_insert_flight$$
+DROP TRIGGER IF EXISTS trg_before_update_flight$$
 
 CREATE TRIGGER trg_before_update_component_status
 BEFORE UPDATE ON Component
@@ -46,10 +51,57 @@ BEGIN
     END IF;
 END$$
 
+CREATE TRIGGER trg_before_update_aircraft_status
+BEFORE UPDATE ON Aircraft
+FOR EACH ROW
+BEGIN
+    IF OLD.service_status = 'retired'
+       AND NEW.service_status <> 'retired' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retired aircraft cannot return to service.';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_before_insert_maintenance_plan
+BEFORE INSERT ON MaintenancePlan
+FOR EACH ROW
+BEGIN
+    DECLARE v_related_component_count INT DEFAULT 0;
+    DECLARE v_related_result VARCHAR(30) DEFAULT NULL;
+
+    IF NEW.related_maintenance_id IS NOT NULL THEN
+        SELECT COUNT(*) INTO v_related_component_count
+        FROM MaintenanceRecord
+        WHERE maintenance_id = NEW.related_maintenance_id
+          AND component_id = NEW.component_id;
+
+        IF v_related_component_count = 0 THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Maintenance plan and related maintenance record must belong to the same component.';
+        END IF;
+    END IF;
+
+    IF NEW.status = 'completed' THEN
+        IF NEW.related_maintenance_id IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Completed maintenance plan must reference a completed maintenance record.';
+        END IF;
+
+        SELECT result INTO v_related_result
+        FROM MaintenanceRecord
+        WHERE maintenance_id = NEW.related_maintenance_id;
+
+        IF v_related_result = 'pending' THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Related maintenance record must be completed before the plan.';
+        END IF;
+    END IF;
+END$$
+
 CREATE TRIGGER trg_before_update_maintenance_plan
 BEFORE UPDATE ON MaintenancePlan
 FOR EACH ROW
 BEGIN
+    DECLARE v_related_component_count INT DEFAULT 0;
+    DECLARE v_related_result VARCHAR(30) DEFAULT NULL;
+
     IF OLD.status IN ('completed', 'cancelled')
        AND NOT (OLD.status <=> NEW.status) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Completed or cancelled maintenance plan status cannot be changed.';
@@ -61,9 +113,41 @@ BEGIN
         SET NEW.completed_at = NOW();
     END IF;
 
+    IF OLD.status = 'pending'
+       AND OLD.related_maintenance_id IS NOT NULL
+       AND NEW.status = 'cancelled' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Started maintenance plan cannot be cancelled.';
+    END IF;
+
     IF NEW.completed_at IS NOT NULL
        AND NEW.completed_at < NEW.created_at THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan completed_at cannot be earlier than created_at.';
+    END IF;
+
+    IF NEW.related_maintenance_id IS NOT NULL THEN
+        SELECT COUNT(*) INTO v_related_component_count
+        FROM MaintenanceRecord
+        WHERE maintenance_id = NEW.related_maintenance_id
+          AND component_id = NEW.component_id;
+
+        IF v_related_component_count = 0 THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Maintenance plan and related maintenance record must belong to the same component.';
+        END IF;
+    END IF;
+
+    IF OLD.status = 'pending' AND NEW.status = 'completed' THEN
+        IF NEW.related_maintenance_id IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan must be started before completion.';
+        END IF;
+
+        SELECT result INTO v_related_result
+        FROM MaintenanceRecord
+        WHERE maintenance_id = NEW.related_maintenance_id;
+
+        IF v_related_result = 'pending' THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Related maintenance record must be completed before the plan.';
+        END IF;
     END IF;
 END$$
 
@@ -85,6 +169,8 @@ BEGIN
     DECLARE v_position_code VARCHAR(100);
     DECLARE v_position_allowed_category VARCHAR(50);
     DECLARE v_component_category VARCHAR(50);
+    DECLARE v_design_life_hours DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_used_hours DECIMAL(12,2) DEFAULT 0;
 
     SELECT COUNT(*) INTO v_installer_count
     FROM Operator
@@ -128,11 +214,24 @@ BEGIN
     FROM Aircraft
     WHERE aircraft_id = NEW.aircraft_id;
 
-    SELECT cm.applicable_aircraft_model, cm.category
-    INTO v_applicable_aircraft_model, v_component_category
+    SELECT cm.applicable_aircraft_model, cm.category, cm.design_life_hours
+    INTO v_applicable_aircraft_model, v_component_category, v_design_life_hours
     FROM Component c
     JOIN ComponentModel cm ON c.model_id = cm.model_id
     WHERE c.component_id = NEW.component_id;
+
+    SELECT COALESCE(SUM(fl.flight_hours), 0)
+    INTO v_used_hours
+    FROM InstallationRecord ir
+    LEFT JOIN FlightLog fl
+      ON fl.aircraft_id = ir.aircraft_id
+     AND fl.takeoff_time >= ir.install_time
+     AND (ir.uninstall_time IS NULL OR fl.landing_time <= ir.uninstall_time)
+    WHERE ir.component_id = NEW.component_id;
+
+    IF v_used_hours >= v_design_life_hours THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Component has reached its design life and cannot be installed.';
+    END IF;
 
     IF v_applicable_aircraft_model IS NOT NULL
        AND TRIM(v_applicable_aircraft_model) <> ''
@@ -178,6 +277,140 @@ BEGIN
     IF NEW.uninstall_time IS NOT NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'New installation record should not have uninstall_time.';
     END IF;
+END$$
+
+CREATE TRIGGER trg_before_insert_flight
+BEFORE INSERT ON FlightLog
+FOR EACH ROW
+BEGIN
+    DECLARE v_aircraft_count INT DEFAULT 0;
+    DECLARE v_aircraft_status VARCHAR(30);
+    DECLARE v_start_date DATE;
+    DECLARE v_overlap_count INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_aircraft_count
+    FROM Aircraft
+    WHERE aircraft_id = NEW.aircraft_id;
+
+    IF v_aircraft_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft does not exist.';
+    END IF;
+
+    SELECT service_status, start_date
+    INTO v_aircraft_status, v_start_date
+    FROM Aircraft
+    WHERE aircraft_id = NEW.aircraft_id;
+
+    IF v_aircraft_status <> 'active' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only active aircraft can record a completed flight.';
+    END IF;
+
+    IF v_start_date IS NOT NULL AND DATE(NEW.takeoff_time) < v_start_date THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Flight time cannot be earlier than aircraft service start date.';
+    END IF;
+
+    IF NEW.landing_time > NOW() THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Completed flight landing_time cannot be in the future.';
+    END IF;
+
+    SELECT COUNT(*) INTO v_overlap_count
+    FROM FlightLog
+    WHERE aircraft_id = NEW.aircraft_id
+      AND NEW.takeoff_time < landing_time
+      AND NEW.landing_time > takeoff_time;
+
+    IF v_overlap_count > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft already has an overlapping flight log.';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_after_insert_flight
+AFTER INSERT ON FlightLog
+FOR EACH ROW
+BEGIN
+    INSERT INTO MaintenancePlan (
+        component_id,
+        planned_type,
+        planned_time,
+        planned_reason,
+        status,
+        created_by,
+        related_maintenance_id
+    )
+    SELECT
+        c.component_id,
+        'life_limit_check',
+        NEW.landing_time,
+        CONCAT('Component reached design life after flight ', NEW.mission_no),
+        'pending',
+        NEW.recorded_by,
+        NULL
+    FROM InstallationRecord current_ir
+    JOIN Component c ON current_ir.component_id = c.component_id
+    JOIN ComponentModel cm ON c.model_id = cm.model_id
+    WHERE current_ir.aircraft_id = NEW.aircraft_id
+      AND current_ir.uninstall_time IS NULL
+      AND NEW.takeoff_time >= current_ir.install_time
+      AND (
+          SELECT COALESCE(SUM(fl.flight_hours), 0)
+          FROM InstallationRecord history_ir
+          JOIN FlightLog fl
+            ON fl.aircraft_id = history_ir.aircraft_id
+           AND fl.takeoff_time >= history_ir.install_time
+           AND (history_ir.uninstall_time IS NULL OR fl.landing_time <= history_ir.uninstall_time)
+          WHERE history_ir.component_id = c.component_id
+      ) >= cm.design_life_hours
+      AND NOT EXISTS (
+          SELECT 1
+          FROM MaintenancePlan mp
+          WHERE mp.component_id = c.component_id
+            AND mp.planned_type = 'life_limit_check'
+            AND mp.status = 'pending'
+      );
+
+    UPDATE Aircraft a
+    SET a.service_status = 'maintenance'
+    WHERE a.aircraft_id = NEW.aircraft_id
+      AND a.service_status = 'active'
+      AND EXISTS (
+          SELECT 1
+          FROM InstallationRecord current_ir
+          JOIN Component c ON current_ir.component_id = c.component_id
+          JOIN ComponentModel cm ON c.model_id = cm.model_id
+          WHERE current_ir.aircraft_id = NEW.aircraft_id
+            AND current_ir.uninstall_time IS NULL
+            AND NEW.takeoff_time >= current_ir.install_time
+            AND (
+                SELECT COALESCE(SUM(fl.flight_hours), 0)
+                FROM InstallationRecord history_ir
+                JOIN FlightLog fl
+                  ON fl.aircraft_id = history_ir.aircraft_id
+                 AND fl.takeoff_time >= history_ir.install_time
+                 AND (history_ir.uninstall_time IS NULL OR fl.landing_time <= history_ir.uninstall_time)
+                WHERE history_ir.component_id = c.component_id
+            ) >= cm.design_life_hours
+      );
+
+    IF ROW_COUNT() > 0 THEN
+        INSERT INTO AuditLog (
+            operator_id, operation_type, target_table, target_id,
+            operation_time, operation_detail
+        ) VALUES (
+            NEW.recorded_by,
+            'life_limit_grounding',
+            'Aircraft',
+            NEW.aircraft_id,
+            NEW.landing_time,
+            CONCAT('Aircraft moved to maintenance after flight ', NEW.mission_no, ' because an installed component reached design life')
+        );
+    END IF;
+END$$
+
+CREATE TRIGGER trg_before_update_flight
+BEFORE UPDATE ON FlightLog
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Flight log cannot be modified.';
 END$$
 
 CREATE TRIGGER trg_after_insert_installation
@@ -303,7 +536,8 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Retired component cannot be maintained.';
     END IF;
 
-    IF v_component_status = 'installed' THEN
+    IF v_component_status = 'installed'
+       AND LOWER(TRIM(NEW.maintenance_type)) NOT IN ('online inspection', 'line inspection') THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Installed component must be uninstalled before maintenance';
     END IF;
 

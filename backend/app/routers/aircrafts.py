@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -7,7 +7,7 @@ from app.openapi_docs import SUCCESS_RESPONSE
 from app.utils.responses import ok
 
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 from app.utils.db_errors import raise_db_error
@@ -18,7 +18,7 @@ class AircraftCreate(BaseModel):
     start_date: Optional[date] = None
 
 class AircraftStatusUpdate(BaseModel):
-    service_status: str
+    service_status: Literal["active", "maintenance", "retired"]
 
 # 在 AircraftStatusUpdate 下面加上这个：
 class OperatorCreate(BaseModel):
@@ -92,6 +92,13 @@ def create_aircraft(payload: AircraftCreate, db: Session = Depends(get_db)):
 )
 def update_aircraft_status(aircraft_no: str, payload: AircraftStatusUpdate, db: Session = Depends(get_db)):
     try:
+        aircraft_exists = db.execute(
+            text("SELECT 1 FROM Aircraft WHERE aircraft_no = :aircraft_no"),
+            {"aircraft_no": aircraft_no},
+        ).scalar_one_or_none()
+        if aircraft_exists is None:
+            raise HTTPException(status_code=404, detail="Aircraft does not exist.")
+
         db.execute(
             text("UPDATE Aircraft SET service_status = :service_status WHERE aircraft_no = :aircraft_no"),
             {"service_status": payload.service_status, "aircraft_no": aircraft_no}
