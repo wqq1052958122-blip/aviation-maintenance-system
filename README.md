@@ -1,141 +1,95 @@
-
-## 本次整合与优化说明
-
-本版本在原有数据库、后端和前端基础上进行了整合与收尾优化，主要目标是让系统能够更稳定地联动展示数据库功能，并提升前端页面的一致性和项目提交观感。
-
-### 1. 数据库增强结果接入前端展示
-
-为了让数据库新增的分析视图不只停留在 SQL 层，本次已将相关统计能力接入 Dashboard 页面。
-
-新增后端接口：
-
-* `GET /stats/component-life-warning`：获取部件寿命预警数据；
-* `GET /stats/retirement-reasons`：获取退役原因统计数据；
-* `GET /stats/db-integrity-checks`：获取数据库规则健康检查结果。
-
-Dashboard 新增展示内容：
-
-* 部件寿命预警表格，展示部件设计寿命、已用小时、剩余寿命、使用比例和预警等级；
-* 退役原因统计图，用于展示不同退役原因的数量分布；
-* 数据库规则健康检查卡片，用于展示退役状态一致性、安装型号适配、安装位置冲突等检查结果。
-
-这样可以在前端直接体现数据库在寿命预警、统计分析和完整性规则检查方面的作用。
-
-### 2. 前端文案与状态显示统一
-
-本次对主要前端页面进行了轻量级清理和文案统一，涉及页面包括：
-
-* Dashboard
-* Components
-* Installations
-* Maintenances
-* Flights
-* Aircrafts
-* Operators
-
-主要调整包括：
-
-* 删除明显的 `console.log`、`console.warn`、`console.error` 等调试输出；
-* 删除部分废弃旧实现和无用注释；
-* 统一按钮文案，例如新增类按钮统一为“新增…”，表单提交按钮统一为“提交”；
-* 统一部件状态、维修结果、飞机状态和预警状态的中文显示；
-* 安装列表不再直接显示英文部件状态；
-* 错误提示统一为“操作失败：<后端返回信息>”的形式，既保留后端/数据库错误原因，也让前端提示更一致；
-* 修复 Components 页面重复加载和未定义错误转换函数的问题。
-
-### 3. README 文档补充
-
-根目录新增并完善了 `README.md`，用于说明项目整体情况和启动方式。
-
-README 中补充了：
-
-* 项目简介；
-* 技术栈说明；
-* 项目目录结构；
-* 数据库初始化顺序；
-* `.env` 配置说明；
-* Windows 下后端启动命令；
-* Windows PowerShell 下前端使用 `npm.cmd` 启动的方式；
-* 核心功能说明；
-* 数据库设计亮点说明。
-
-其中前端启动建议使用：
-
-```powershell
-cd aviation-frontend
-npm.cmd install
-npm.cmd run dev
-```
-
-原因是 Windows PowerShell 可能会限制 `npm.ps1` 脚本执行，使用 `npm.cmd` 可以避免执行策略问题。
-
-### 4. 未修改内容说明
-
-本次前端清理和文档补充没有修改数据库 SQL 文件，也没有修改后端核心业务逻辑。
-
-未修改内容包括：
-
-* 未修改 `db/*.sql`；
-* 未修改数据库表结构、触发器、存储过程和视图定义；
-* 未修改已有 API 路径；
-* 未新增复杂页面；
-* 未引入登录、权限等额外功能。
-
-### 5. 验证情况
-
-本次修改后已完成以下检查：
-
-* `npm.cmd run build` 通过；
-* `git diff --check` 通过；
-* 未提交 `.env`、`.venv`、`node_modules` 等本地环境文件；
-* 构建中仍存在原有第三方依赖的 `PURE annotation` 和大 chunk 警告，但不影响正常构建和运行。
-
-### 6. 打包说明
-
-最终打包时请注意不要包含以下本地文件或目录：
-
-* `backend/.env`
-* `backend/.venv/`
-* `aviation-frontend/node_modules/`
-* `__pycache__/`
-* `*.pyc`
-
-建议保留：
-
-* `README.md`
-* `db/*.sql`
-* `backend/`
-* `aviation-frontend/`
-* `backend/.env.example`
-* `backend/requirements.txt`
-* `aviation-frontend/package.json`
 # 航空部件生命周期与维修管理系统
 
-本项目是以数据库设计为核心的航空部件生命周期管理课程项目。系统通过 MySQL 约束、触发器、存储过程、事务和视图维护部件从入库、安装、维修到退役的完整历史，并由 FastAPI 和 Vue 提供接口及可视化界面。
+本项目是一个以数据库设计为核心的航空维修管理课程项目，围绕航空部件从入库、安装、拆卸、维修、更换到退役的完整生命周期展开。
+
+系统使用 MySQL 约束、触发器、存储过程、事务和视图维护核心业务规则，FastAPI 提供统一接口，Vue 3 负责管理界面与数据可视化。项目重点不是模拟订票业务，而是展示数据库在航空维修数据完整性、历史追溯和风险分析中的作用。
+
+> 项目中的飞机、部件型号、设计寿命、维修周期和飞行记录均为教学模拟数据，不代表真实航空器参数或适航标准。
+
+## 系统展示
+
+适合课程答辩重点展示以下页面：
+
+- Landing 首页：航空科技风系统门户与功能入口。
+- Dashboard：寿命风险、维修计划、数据库健康状态、审计日志及统计图表。
+- 部件管理：部件档案、飞行使用统计和完整生命周期时间轴。
+- 机队管理：飞机基础信息与当前安装部件配置。
+- 维修管理：维修工单以及 pending、completed、cancelled 全状态维修计划。
 
 ## 技术栈
 
-- MySQL 8.0
-- FastAPI
-- Vue 3
-- Element Plus
-- ECharts
+- 数据库：MySQL 8.0
+- 后端：FastAPI、SQLAlchemy、PyMySQL
+- 前端：Vue 3、Vite
+- UI：Element Plus
+- 图表：ECharts
 
 ## 核心功能
 
-- 部件入库
-- 安装与拆卸
-- 部件更换事务
-- 维修管理
-- 飞行日志
-- 退役管理
-- 生命周期追溯
+- 部件入库与基础档案管理
+- 部件状态和退役状态管理
+- 飞机与安装位置管理
+- 部件安装、拆卸与事务更换
+- 维修工单创建与完成
+- 维修计划创建、完成和取消
+- 飞行日志与部件飞行小时统计
 - 部件寿命预警
-- 数据库健康检查
+- 部件退役管理
+- 完整生命周期时间轴
+- 关键业务操作审计
+- 数据库完整性健康检查
+
+## 数据库设计亮点
+
+### 触发器与完整性约束
+
+- 保护 `Component.status` 与 `Component.is_retired` 一致。
+- 检查部件型号与飞机型号是否适配。
+- 防止同一飞机安装位置存在多个当前有效部件。
+- 保护安装、维修和维修计划的时间顺序。
+- 禁止核心历史记录被物理删除。
+
+### 存储过程与事务
+
+- `sp_replace_component`：在同一事务内完成旧部件拆卸、新部件安装和审计记录。
+- `sp_retire_component`：执行部件退役并保留退役原因和审批信息。
+- `sp_complete_maintenance`：完成维修并根据安装状态更新部件状态。
+
+### 状态流转规则
+
+`ComponentStatusTransitionRule` 保存合法状态流转，`trg_before_update_component_status` 拒绝非法变化。同一状态更新允许，`retired` 为终态。
+
+### 权威飞行小时统计
+
+寿命预警以 `FlightLog + InstallationRecord` 按安装时间区间推导出的飞行小时为准。`Component.total_flight_hours` 仅作为历史兼容字段，不作为寿命判断依据。
+
+### 生命周期、计划与审计
+
+- `v_component_full_timeline` 汇总入库、安装、拆卸、维修、退役和维修计划事件。
+- `MaintenancePlan` 支持计划性维护及完成、取消后的历史追溯。
+- `AuditLog` 记录更换、退役、维修完成和维修计划操作。
+
+## 项目目录
+
+```text
+aviation-project/
+├── aviation-frontend/       # Vue 3 前端
+│   ├── src/api/             # 前端 API 封装
+│   ├── src/views/           # Landing 与后台业务页面
+│   └── package.json
+├── backend/                 # FastAPI 后端
+│   ├── app/routers/         # API 路由
+│   ├── app/schemas.py       # Pydantic 请求模型
+│   ├── .env.example         # 环境配置模板
+│   └── requirements.txt
+├── db/                      # MySQL 初始化与测试脚本
+├── AGENTS.md                # 项目协作规则
+└── README.md
+```
 
 ## 数据库初始化
 
-请使用 MySQL 8.0，按以下顺序执行 `db/` 中的脚本：
+请使用 MySQL 8.0，并严格按以下顺序执行 `db/` 下的脚本：
 
 ```text
 01_create_tables.sql
@@ -146,26 +100,40 @@ npm.cmd run dev
 07_indexes.sql
 ```
 
-`06_test_illegal_ops.sql` 和 `08_test_procedures.sql` 是验证脚本，建议阅读注释后分段执行，不要作为初始化脚本一次性运行。
+说明：
+
+- `01_create_tables.sql` 会删除并重新创建 `aviation_maintenance` 数据库，请提前备份已有数据。
+- `02_seed_data.sql` 插入教学演示数据。
+- `06_test_illegal_ops.sql` 是非法操作拦截测试。
+- `08_test_procedures.sql` 是存储过程和事务验证脚本。
+- `06` 和 `08` 不属于初始化步骤，建议根据注释分段执行。
 
 ## 本地环境配置
 
-后端配置模板位于 `backend/.env.example`。首次运行时复制为本地配置：
+后端配置模板位于 `backend/.env.example`。首次运行时复制模板：
 
 ```powershell
 cd backend
 Copy-Item .env.example .env
 ```
 
-然后编辑 `.env`，填写本机 MySQL 连接信息。
+编辑 `.env` 并填写本机 MySQL 配置：
 
-- `.env.example`：可提交的配置模板，不包含真实密码。
-- `.env`：本地真实配置，不要提交到 Git。
-- `.venv`、`node_modules` 和构建产物同样不要提交。
+```dotenv
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=aviation_maintenance
+```
+
+- `.env.example` 是可提交的配置模板。
+- `.env` 保存本地真实配置，不要提交到 Git。
+- 不要提交 `.venv/`、`node_modules/`、`dist/`、`__pycache__/` 或 `*.pyc`。
 
 ## Windows 启动后端
 
-首次配置 Python 虚拟环境和依赖：
+首次运行时创建虚拟环境并安装依赖：
 
 ```powershell
 cd backend
@@ -180,10 +148,11 @@ cd backend
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-启动后可访问：
+服务地址：
 
 - API：`http://127.0.0.1:8000`
 - Swagger：`http://127.0.0.1:8000/docs`
+- 健康检查：`http://127.0.0.1:8000/health`
 
 ## Windows PowerShell 启动前端
 
@@ -193,7 +162,9 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Windows PowerShell 可能因执行策略禁止运行 `npm.ps1`。使用 `npm.cmd` 可以绕过这一脚本执行策略限制，同时保持 npm 命令行为不变。
+Vite 默认开发地址通常为 `http://localhost:5173`，请以终端输出为准。
+
+Windows PowerShell 可能因执行策略禁止运行 `npm.ps1`。使用 `npm.cmd` 可以绕过该脚本执行策略限制，同时保持 npm 命令行为不变。
 
 生产构建验证：
 
@@ -202,15 +173,142 @@ cd aviation-frontend
 npm.cmd run build
 ```
 
-默认开发地址以 Vite 终端输出为准，通常为 `http://localhost:5173`。
+## 教学模拟数据规模
 
-## 目录结构
+当前 `02_seed_data.sql` 提供以下演示数据：
+
+| 数据对象 | 数量 |
+|---|---:|
+| 飞机 | 9 |
+| 部件型号 | 16 |
+| 部件实例 | 66 |
+| 安装记录 | 48 |
+| 当前有效安装 | 28 |
+| 历史安装/拆卸 | 20 |
+| 飞行记录 | 40 |
+| 维修记录 | 31 |
+| 维修计划 | 20 |
+| 退役记录 | 12 |
+| 操作人员 | 10 |
+| 审计日志 | 24 |
+
+数据覆盖：
+
+- A320、B737、A330 三种教学模拟机型。
+- 服役中、维修中、已退役三种飞机状态。
+- 发动机、起落架、航电、导航、液压、燃油、空调、刹车和机载电源部件。
+- 在库、可用、已安装、已拆卸、维修中、已退役全部部件状态。
+- 正常、预警、严重三档寿命风险。
+- pending、completed、cancelled 全状态维修计划。
+- 部件更换、维修失败、报废、经济性退役和寿命退役等典型场景。
+
+## 关键 API
+
+所有成功响应统一为：
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+错误响应统一通过 `message` 返回：
+
+```json
+{
+  "success": false,
+  "message": "错误信息"
+}
+```
+
+### 部件与生命周期
+
+- `GET /components`
+- `POST /components`
+- `GET /components/{component_no}/profile`
+- `GET /components/{component_no}/lifecycle`
+- `GET /components/{component_no}/full-timeline`
+- `GET /components/{component_no}/flight-usage`
+- `POST /components/replace`
+- `POST /components/{component_no}/retire`
+
+### 安装与飞机
+
+- `GET /aircrafts`
+- `POST /aircrafts`
+- `PUT /aircrafts/{aircraft_no}/status`
+- `GET /current-installations`
+- `GET /install-positions`
+- `POST /installations`
+- `POST /installations/{installation_id}/uninstall`
+
+### 维修与维修计划
+
+- `GET /maintenances`
+- `POST /maintenances`
+- `POST /maintenances/{maintenance_id}/complete`
+- `GET /components/{component_no}/maintenances`
+- `GET /maintenance-plans`
+- `POST /maintenance-plans`
+- `POST /maintenance-plans/{plan_id}/complete`
+- `POST /maintenance-plans/{plan_id}/cancel`
+
+### 飞行、统计与审计
+
+- `GET /flights`
+- `POST /flights`
+- `GET /stats/summary`
+- `GET /stats/model-maintenance`
+- `GET /stats/component-life-warning`
+- `GET /stats/retirement-reasons`
+- `GET /stats/db-integrity-checks`
+- `GET /audit-logs/recent`
+
+完整请求模型和返回结构请以 Swagger 为准。
+
+## 测试与验证
+
+### 数据库测试
+
+按初始化顺序完成后：
+
+1. 分段执行 `db/06_test_illegal_ops.sql`，验证非法状态流转、时间约束、删除保护、型号适配和安装位置冲突。
+2. 分段执行 `db/08_test_procedures.sql`，验证更换、退役、维修完成、审计日志和生命周期时间轴。
+3. 查询以下视图确认数据：
+
+```sql
+SELECT * FROM v_component_life_warning ORDER BY life_usage_ratio DESC;
+SELECT * FROM v_component_full_timeline ORDER BY component_no, event_time;
+SELECT * FROM v_maintenance_plan_detail ORDER BY created_at DESC;
+SELECT * FROM v_audit_log_detail ORDER BY operation_time DESC;
+```
+
+### 后端检查
+
+启动服务后首先访问：
 
 ```text
-aviation-project/
-├── db/                  # MySQL 表、触发器、存储过程、视图和测试脚本
-├── backend/             # FastAPI 后端
-├── aviation-frontend/   # Vue 3 前端
-├── AGENTS.md            # 项目协作与开发规则
-└── README.md
+GET /health
 ```
+
+然后在 Swagger 中测试部件时间轴、维修计划、统计和审计接口。
+
+### 前端检查
+
+```powershell
+cd aviation-frontend
+npm.cmd run build
+```
+
+## 注意事项
+
+- 所有航空参数均为教学模拟值，不可用于真实维修或适航决策。
+- 数据库初始化脚本会重建数据库，执行前请确认目标环境。
+- 核心业务记录不应通过 `DELETE` 删除，应使用状态流转或退役流程。
+- 部件更换优先使用 `POST /components/replace`；`POST /replace` 仅为旧版兼容入口。
+- 测试脚本包含预期失败的语句，请根据注释逐段执行。
+
+## 项目总结
+
+本项目通过前后端界面展示数据库业务能力，但核心仍是数据库设计：业务约束由表约束、触发器、存储过程、事务和视图共同保证。系统能够保留航空部件完整历史、阻止非法操作、追踪责任人，并通过飞行记录推导寿命风险，适合作为数据库课程设计和答辩演示项目。
