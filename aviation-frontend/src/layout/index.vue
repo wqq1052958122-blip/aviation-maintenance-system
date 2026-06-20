@@ -1,10 +1,11 @@
 <template>
-  <el-container class="layout-container">
+  <router-view v-if="$route.meta.landing" />
+  <el-container v-else class="layout-container">
     <el-aside width="200px" class="aside">
       <div class="logo">航空维修管理系统</div>
       <el-menu
-        active-text-color="#ffd04b"
-        background-color="#304156"
+        active-text-color="#ffffff"
+        background-color="transparent"
         text-color="#fff"
         :default-active="$route.path"
         router
@@ -53,7 +54,10 @@
       航空部件生命周期与维修管理系统
     </strong>
   </div>
-  
+  <router-link to="/" class="home-link">
+    <el-icon><House /></el-icon>
+    系统首页
+  </router-link>
 </el-header>
       <el-main class="main">
         <router-view />
@@ -68,7 +72,8 @@
   height: 100vh;
 }
 .aside {
-  background-color: #304156;
+  background: linear-gradient(180deg, #062b52 0%, #074b82 58%, #06365f 100%);
+  box-shadow: 4px 0 18px rgba(5, 42, 75, 0.16);
 }
 .logo {
   height: 60px;
@@ -77,17 +82,45 @@
   color: #fff;
   font-size: 16px;
   font-weight: bold;
-  border-bottom: 1px solid #1f2d3d;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  letter-spacing: 1px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.aside :deep(.el-menu) {
+  border-right: 0;
+  padding: 12px 10px;
+}
+.aside :deep(.el-menu-item) {
+  margin-bottom: 6px;
+  border-radius: 9px;
+}
+.aside :deep(.el-menu-item:hover) {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+.aside :deep(.el-menu-item.is-active) {
+  background: linear-gradient(90deg, #1677c8, #2f9be8) !important;
+  box-shadow: 0 6px 16px rgba(0, 94, 171, 0.28);
 }
 .header {
   background-color: #fff;
-  border-bottom: 1px solid #e6e6e6;
+  border-bottom: 1px solid #e3edf6;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 24px;
+  justify-content: space-between;
+  box-shadow: 0 3px 14px rgba(15, 70, 112, 0.06);
 }
 .main {
-  background-color: #f0f2f5;
-  padding: 20px;
+  background: #f3f7fb;
+  padding: 24px;
+}
+.home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1769aa;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
 }
 </style>

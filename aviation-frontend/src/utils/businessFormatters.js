@@ -5,7 +5,11 @@ const maintenanceTypeMap = {
   'routine inspection': '例行检查',
   'regular inspection': '例行检查',
   'scheduled inspection': '计划检查',
+  scheduled_inspection: '计划检查',
   'scheduled maintenance': '计划维修',
+  preventive_maintenance: '预防性维修',
+  life_limit_check: '寿命限制检查',
+  post_replacement_check: '更换后检查',
   routine: '常规检查',
   repair: '维修',
   'fault repair': '故障维修',
@@ -23,6 +27,8 @@ const retirementReasonMap = {
   'irreparable damage found during inspection': '检查发现不可修复损伤',
   'scrapped after maintenance': '维修后报废',
   'manual retirement': '人工退役',
+  'economic retirement': '经济性退役',
+  'replacement retirement': '更换后退役',
   other: '其他原因',
   'n/a': '未填写原因'
 }
@@ -33,6 +39,72 @@ const commonTextMap = {
   'performance check': '性能检查',
   'component replacement': '部件更换',
   'normal installation': '正常安装',
+  'replacement installation': '更换安装',
+  'fleet reassignment': '机队调配',
+  'navigation upgrade': '导航设备升级',
+  'life limit reached': '达到寿命限制',
+  'navigation replacement': '导航设备更换',
+  'irreparable leakage': '发现不可修复泄漏',
+  'economic retirement': '经济性退役',
+  'aircraft retirement': '随飞机退役',
+  'maintenance failure': '维修失败',
+  'irreparable damage': '发现不可修复损伤',
+  'replacement retirement': '更换后退役',
+  'scheduled overhaul': '计划大修',
+  'pressure instability': '压力不稳定',
+  'fault isolation': '故障隔离检查',
+  'scheduled inspection': '计划检查',
+  'wear inspection': '磨损检查',
+  'high life usage requires focused inspection.': '寿命使用比例较高，需要重点检查。',
+  'critical navigation life usage.': '导航部件寿命使用比例已达到严重阈值。',
+  'preventive pressure inspection.': '执行预防性压力检查。',
+  'brake life warning follow-up.': '跟进刹车部件寿命预警。',
+  'follow-up after overhaul.': '大修后跟踪检查。',
+  'navigation fault prevention plan.': '导航故障预防计划。',
+  'hydraulic repair quality review.': '液压维修质量复核。',
+  'landing gear preventive inspection.': '起落架预防性检查。',
+  'routine engine inspection.': '发动机例行检查。',
+  'validate replacement installation.': '验证更换后的安装状态。',
+  'scheduled engine prevention task.': '发动机计划性预防维护。',
+  'hydraulic pressure inspection.': '液压压力检查。',
+  'teaching overhaul plan.': '教学模拟大修计划。',
+  'navigation line inspection.': '导航设备航线检查。',
+  'landing gear scheduled check.': '起落架计划检查。',
+  'plan superseded by inventory rotation.': '计划因库存轮换调整而取消。',
+  'no longer required after scope change.': '维护范围调整后无需执行。',
+  'replacement task was deferred.': '更换任务已延期。',
+  'component moved back to reserve stock.': '部件已转回备用库存。',
+  'fleet maintenance window changed.': '机队维修窗口已调整。',
+  'life limit and turbine damage confirmed.': '确认达到寿命限制并发现涡轮损伤。',
+  'navigation signal remained unstable.': '导航信号仍不稳定。',
+  'irreparable hydraulic leakage found.': '发现不可修复的液压泄漏。',
+  'control module failed bench test.': '控制模块台架测试未通过。',
+  'core damage exceeds repair limit.': '核心损伤超过修复限度。',
+  'irreparable circuit damage.': '发现不可修复的电路损伤。',
+  'brake wear exceeds teaching threshold.': '刹车磨损超过教学模拟阈值。',
+  'online inspection passed while installed.': '在线检查通过，部件保持安装状态。',
+  'navigation accuracy check passed.': '导航精度检查通过。',
+  'hydraulic pressure stable.': '液压压力稳定。',
+  'avionics self-test passed.': '航电自检通过。',
+  'fuel control response normal.': '燃油控制响应正常。',
+  'cabin pressure sensor replaced.': '已更换客舱压力传感器。',
+  'brake lining inspection passed.': '刹车衬片检查通过。',
+  'engine trend data normal.': '发动机趋势数据正常。',
+  'replacement verification passed.': '更换后验证通过。',
+  'scheduled inspection completed.': '计划检查已完成。',
+  'intermittent signal fault remains.': '间歇性信号故障仍然存在。',
+  'pressure test passed.': '压力测试通过。',
+  'avionics inspection passed.': '航电检查通过。',
+  'teaching overhaul completed.': '教学模拟大修已完成。',
+  'navigation line check passed.': '导航设备航线检查通过。',
+  'landing gear inspection passed.': '起落架检查通过。',
+  'oil sensor replaced.': '已更换滑油传感器。',
+  'engine overhaul in progress.': '发动机大修进行中。',
+  'navigation fault isolation in progress.': '导航故障隔离进行中。',
+  'hydraulic pump repair in progress.': '液压泵维修进行中。',
+  'replacement verification pending.': '等待更换后验证。',
+  'landing gear inspection pending.': '等待起落架检查。',
+  'pressure fluctuation requires further repair.': '压力波动，需要进一步维修。',
   'routine online inspection passed.': '例行在线检查通过。',
   'hydraulic pressure test passed.': '液压压力测试通过。',
   'navigation module under repair.': '导航模块正在维修。',
@@ -48,6 +120,12 @@ const positionMap = {
   'right engine position': '右侧发动机位置',
   'navigation bay': '导航舱',
   'hydraulic system bay': '液压系统舱',
+  'landing gear bay': '主起落架舱',
+  'avionics bay': '航电设备舱',
+  'fuel control bay': '燃油控制舱',
+  'air conditioning bay': '空调系统舱',
+  'brake assembly': '刹车组件位',
+  'battery bay': '机载电源舱',
   'main landing gear': '主起落架',
   nose: '机头',
   tail: '尾翼'
@@ -59,7 +137,10 @@ const categoryMap = {
   hydraulic: '液压',
   battery: '电池',
   avionics: '航电',
-  landing_gear: '起落架'
+  landing_gear: '起落架',
+  fuel: '燃油系统',
+  air_conditioning: '空调系统',
+  brake: '刹车系统'
 }
 
 export const formatComponentCategory = (value) => categoryMap[normalize(value)] || (normalize(value) === 'n/a' ? '未填写类别' : value || '-')
@@ -79,11 +160,33 @@ export const formatComponentStatus = (value) => ({
   retired: '已退役'
 }[normalize(value)] || value || '-')
 
+export const getComponentStatusType = (value) => ({
+  in_stock: 'info',
+  available: 'success',
+  installed: 'primary',
+  removed: 'info',
+  under_maintenance: 'warning',
+  retired: 'danger'
+}[normalize(value)] || 'info')
+
+export const getAircraftStatusType = (value) => ({
+  active: 'success',
+  maintenance: 'warning',
+  retired: 'danger'
+}[normalize(value)] || 'info')
+
 export const formatInstallPosition = (value) => positionMap[normalize(value)] || value || '-'
 
 export const formatMaintenanceType = (value) => maintenanceTypeMap[normalize(value)] || value || '-'
 
 export const formatPlanType = (value) => formatMaintenanceType(value)
+
+export const formatFlightMissionType = (value) => ({
+  training: '训练任务',
+  patrol: '巡逻任务',
+  transport: '运输任务',
+  'test flight': '试飞任务'
+}[normalize(value)] || value || '-')
 
 export const formatMaintenanceResult = (value) => ({
   pending: '待处理',
@@ -92,11 +195,36 @@ export const formatMaintenanceResult = (value) => ({
   scrapped: '报废'
 }[normalize(value)] || value || '-')
 
+export const getMaintenanceResultType = (value) => ({
+  pending: 'warning',
+  passed: 'success',
+  failed: 'danger',
+  scrapped: 'danger'
+}[normalize(value)] || 'info')
+
 export const formatPlanStatus = (value) => ({
   pending: '待执行',
   completed: '已完成',
   cancelled: '已取消'
 }[normalize(value)] || value || '-')
+
+export const getPlanStatusType = (value) => ({
+  pending: 'warning',
+  completed: 'success',
+  cancelled: 'info'
+}[normalize(value)] || 'info')
+
+export const formatWarningLevel = (value) => ({
+  normal: '正常',
+  warning: '预警',
+  critical: '严重'
+}[normalize(value)] || value || '-')
+
+export const getWarningStatusType = (value) => ({
+  normal: 'success',
+  warning: 'warning',
+  critical: 'danger'
+}[normalize(value)] || 'info')
 
 export const formatRetirementReason = (value) => retirementReasonMap[normalize(value)] || value || '未填写原因'
 

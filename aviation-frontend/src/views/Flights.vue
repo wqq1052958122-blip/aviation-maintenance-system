@@ -1,13 +1,21 @@
 <template>
   <div class="app-container">
-    <div class="header-action">
-      <h2>飞行任务日志管理</h2>
+    <div class="page-header">
+      <div><h2>飞行记录</h2><p>记录飞行任务并支撑部件飞行小时统计</p></div>
       <el-button type="primary" @click="createVisible = true">
         <el-icon><Plus /></el-icon> 新增飞行记录
       </el-button>
     </div>
 
-    <el-table :data="flightList" border style="width: 100%" v-loading="loading">
+    <div class="filter-panel">
+      <el-form class="filter-form" inline>
+        <el-form-item label="飞机编号"><el-input v-model="filters.aircraftNo" clearable placeholder="输入飞机编号" style="width: 180px" /></el-form-item>
+        <el-form-item label="日期范围"><el-date-picker v-model="filters.dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" /></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchList">刷新</el-button></div></el-form-item>
+      </el-form>
+    </div>
+
+    <el-table :data="filteredFlights" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="mission_no" label="任务编号" />
       <el-table-column prop="aircraft_no" label="飞机编号" />
       <el-table-column prop="takeoff_time" label="起飞时间" width="160">
@@ -21,8 +29,9 @@
   </template>
 </el-table-column>
       <el-table-column prop="flight_hours" label="飞行时长（小时）" />
-      <el-table-column prop="mission_type" label="任务类型" />
+      <el-table-column label="任务类型"><template #default="scope">{{ formatFlightMissionType(scope.row.mission_type) }}</template></el-table-column>
       <el-table-column prop="recorder_name" label="记录人" />
+      <template #empty><el-empty description="暂无数据" /></template>
     </el-table>
 
     <el-dialog title="新增飞行记录" v-model="createVisible" width="500px">
@@ -56,9 +65,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { getFlightLogs, createFlightLog } from '../api/flights'
 import { ElMessage } from 'element-plus'
+import { formatFlightMissionType } from '../utils/businessFormatters'
 
 const flightList = ref([])
 const loading = ref(false)
@@ -71,6 +81,14 @@ const form = ref({
   mission_type: 'training',
   recorded_by: 1 // 模拟当前用户ID
 })
+const filters = reactive({ aircraftNo: '', dateRange: [] })
+const filteredFlights = computed(() => flightList.value.filter(item => {
+  const aircraftMatched = String(item.aircraft_no || '').toLowerCase().includes(filters.aircraftNo.trim().toLowerCase())
+  const date = String(item.takeoff_time || '').slice(0, 10)
+  const dateMatched = !filters.dateRange?.length || (date >= filters.dateRange[0] && date <= filters.dateRange[1])
+  return aircraftMatched && dateMatched
+}))
+const resetFilters = () => Object.assign(filters, { aircraftNo: '', dateRange: [] })
 
 const fetchList = async () => {
   loading.value = true

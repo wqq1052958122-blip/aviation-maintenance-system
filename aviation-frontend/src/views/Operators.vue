@@ -1,13 +1,21 @@
 <template>
   <div class="app-container">
-    <div class="header-action">
-      <h2>航空维修人员名册</h2>
+    <div class="page-header">
+      <div><h2>操作人员</h2><p>管理维修、安装、退役等关键业务操作人员</p></div>
       <el-button type="primary" @click="createVisible = true">
         <el-icon><Plus /></el-icon> 新增员工
       </el-button>
     </div>
 
-    <el-table :data="operatorList" border style="width: 100%" v-loading="loading">
+    <div class="filter-panel">
+      <el-form class="filter-form" inline>
+        <el-form-item label="人员姓名"><el-input v-model="filters.name" clearable placeholder="输入姓名" style="width: 180px" /></el-form-item>
+        <el-form-item label="角色"><el-select v-model="filters.role" clearable placeholder="全部角色" style="width: 150px"><el-option label="安装专员" value="installer" /><el-option label="维修技师" value="technician" /><el-option label="审批主管" value="approver" /><el-option label="系统管理员" value="admin" /></el-select></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchList">刷新</el-button></div></el-form-item>
+      </el-form>
+    </div>
+
+    <el-table :data="filteredOperators" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="operator_id" label="工号" width="80" align="center" />
       <el-table-column prop="operator_name" label="姓名" width="150" />
       
@@ -27,6 +35,7 @@
     {{ scope.row.created_at ? scope.row.created_at.replace('T', ' ').substring(0, 16) : '未知' }}
   </template>
 </el-table-column>
+      <template #empty><el-empty description="暂无数据" /></template>
     </el-table>
 
     <el-dialog title="新增员工" v-model="createVisible" width="400px">
@@ -55,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { getOperators, createOperator } from '../api/operators'
 import { ElMessage } from 'element-plus'
 
@@ -63,6 +72,12 @@ const operatorList = ref([])
 const loading = ref(false)
 const createVisible = ref(false)
 const form = ref({ operator_name: '', role: 'installer', phone: '' })
+const filters = reactive({ name: '', role: '' })
+const filteredOperators = computed(() => operatorList.value.filter(item =>
+  String(item.operator_name || '').toLowerCase().includes(filters.name.trim().toLowerCase())
+  && (!filters.role || item.role === filters.role)
+))
+const resetFilters = () => Object.assign(filters, { name: '', role: '' })
 
 const fetchList = async () => {
   loading.value = true

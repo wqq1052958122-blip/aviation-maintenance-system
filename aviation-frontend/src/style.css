@@ -1,0 +1,163 @@
+:root {
+  --el-color-primary: #1677c8;
+  --el-color-primary-light-3: #4b98d5;
+  --el-color-primary-light-5: #82b9e2;
+  --el-color-primary-light-8: #d8eaf7;
+  --el-color-primary-light-9: #edf6fc;
+  --aviation-navy: #062b52;
+  --aviation-blue: #1677c8;
+  --aviation-sky: #3da5e7;
+  --aviation-surface: #f3f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 960px;
+  color: #24384a;
+  background: var(--aviation-surface);
+  font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-container {
+  min-height: calc(100vh - 108px);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+  padding: 22px 26px;
+  border: 1px solid #dfeaf3;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #fff, #f3f9fd);
+  box-shadow: 0 8px 24px rgba(15, 73, 116, 0.06);
+}
+
+.page-header h2 {
+  margin: 0 0 7px;
+  color: #103d62;
+  font-size: 25px;
+  letter-spacing: 0.4px;
+}
+
+.page-header p {
+  margin: 0;
+  color: #71879a;
+  font-size: 14px;
+}
+
+.filter-panel {
+  margin-bottom: 18px;
+  padding: 18px 20px 4px;
+  border: 1px solid #e0eaf2;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(18, 75, 116, 0.045);
+}
+
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 14px;
+}
+
+.filter-form .el-form-item {
+  margin-right: 0;
+  margin-bottom: 14px;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.app-container > h2,
+.app-container > .header-action h2 {
+  position: relative;
+  margin-top: 0;
+  color: #123c61;
+  letter-spacing: 0.4px;
+}
+
+.app-container > h2::before,
+.app-container > .header-action h2::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 22px;
+  margin-right: 10px;
+  border-radius: 4px;
+  vertical-align: -3px;
+  background: linear-gradient(180deg, #41b1ec, #1677c8);
+}
+
+.app-container .el-card {
+  border-color: #e4edf5;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(17, 69, 110, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-container .el-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(17, 69, 110, 0.1);
+}
+
+.app-container .el-table {
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.app-container .el-table th.el-table__cell {
+  color: #244c6c;
+  background: #edf6fc;
+}
+
+.app-container .el-table__body tr > td.el-table__cell {
+  transition: background-color 0.18s ease;
+}
+
+.app-container .el-table__body tr:hover > td.el-table__cell {
+  background: #edf7fd !important;
+}
+
+.el-dialog,
+.el-drawer {
+  --el-border-radius-small: 10px;
+}
+
+.el-button {
+  border-radius: 8px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.el-button:hover {
+  transform: translateY(-1px);
+}
+
+.el-drawer__body,
+.el-dialog__body {
+  background: #f8fbfd;
+}
+
+@media (max-width: 1100px) {
+  .main {
+    padding: 18px !important;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

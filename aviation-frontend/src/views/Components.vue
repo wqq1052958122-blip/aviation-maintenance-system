@@ -1,11 +1,22 @@
 <template>
   <div class="app-container">
-    <div class="header-action">
-      <h2>零部件库存与生命周期管理</h2>
+    <div class="page-header">
+      <div><h2>部件管理</h2><p>管理航空部件基础信息、状态、寿命与完整生命周期轨迹</p></div>
       <el-button type="primary" @click="openCreateDialog">新增部件</el-button>
     </div>
 
-    <el-table :data="componentList" border style="width: 100%" v-loading="loading">
+    <div class="filter-panel">
+      <el-form class="filter-form" inline>
+        <el-form-item label="部件编号"><el-input v-model="filters.componentNo" clearable placeholder="输入部件编号" style="width: 160px" /></el-form-item>
+        <el-form-item label="型号"><el-input v-model="filters.modelCode" clearable placeholder="输入型号" style="width: 140px" /></el-form-item>
+        <el-form-item label="类别"><el-input v-model="filters.category" clearable placeholder="输入类别" style="width: 140px" /></el-form-item>
+        <el-form-item label="状态"><el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px"><el-option label="在库" value="in_stock" /><el-option label="可用" value="available" /><el-option label="已安装" value="installed" /><el-option label="已拆卸" value="removed" /><el-option label="维修中" value="under_maintenance" /><el-option label="已退役" value="retired" /></el-select></el-form-item>
+        <el-form-item label="是否退役"><el-select v-model="filters.retired" clearable placeholder="全部" style="width: 120px"><el-option label="未退役" :value="false" /><el-option label="已退役" :value="true" /></el-select></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="refreshList">刷新</el-button></div></el-form-item>
+      </el-form>
+    </div>
+
+    <el-table :data="filteredComponents" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="component_no" label="部件编号" width="150" />
       <el-table-column label="部件类型" width="120">
         <template #default="scope">
@@ -22,13 +33,7 @@
       
       <el-table-column label="当前状态" width="120">
         <template #default="scope">
-          <el-tag v-if="scope.row.status === 'in_stock'" type="info">在库</el-tag>
-          <el-tag v-else-if="scope.row.status === 'available'" type="success">可用</el-tag>
-          <el-tag v-else-if="scope.row.status === 'installed'" type="primary">已安装</el-tag>
-          <el-tag v-else-if="scope.row.status === 'removed'" type="warning">已拆卸</el-tag>
-          <el-tag v-else-if="scope.row.status === 'under_maintenance'" type="warning">维修中</el-tag>
-          <el-tag v-else-if="scope.row.status === 'retired'" type="danger">已退役</el-tag>
-          <el-tag v-else>{{ scope.row.status }}</el-tag>
+          <el-tag :type="getComponentStatusType(scope.row.status)">{{ formatComponentStatus(scope.row.status) }}</el-tag>
         </template>
       </el-table-column>
 
@@ -46,18 +51,22 @@
           </el-button>
         </template>
       </el-table-column>
+      <template #empty><el-empty description="暂无数据" /></template>
     </el-table>
 
-    <el-drawer v-model="drawerVisible" :title="`部件档案溯源: ${currentComponentNo}`" size="40%">
-      <div v-loading="drawerLoading">
-        <el-descriptions title="基础档案信息" :column="2" border style="margin-bottom: 20px;">
+    <el-drawer v-model="drawerVisible" size="46%">
+      <template #header>
+        <div class="drawer-heading"><div><small>COMPONENT LIFECYCLE</small><h2>{{ currentComponentNo }}</h2></div><el-tag :type="getComponentStatusType(drawerComponentStatus)" effect="dark">{{ formatComponentStatus(drawerComponentStatus) }}</el-tag></div>
+      </template>
+      <div v-loading="drawerLoading" element-loading-text="正在加载数据...">
+        <section class="detail-block"><h3>基础信息</h3><el-descriptions :column="2" border>
           <el-descriptions-item label="部件编号">{{ profileData.component_no }}</el-descriptions-item>
           <el-descriptions-item label="所属类别">{{ formatComponentCategory(profileData.category) }}</el-descriptions-item>
           <el-descriptions-item label="生产批次">{{ profileData.batch_no }}</el-descriptions-item>
           <el-descriptions-item label="总飞行时长">{{ profileData.stored_total_flight_hours }} 小时</el-descriptions-item>
-        </el-descriptions>
+        </el-descriptions></section>
 
-        <h3>飞行使用统计</h3>
+        <section class="detail-block"><h3>飞行使用统计</h3>
         <el-table :data="flightUsageData" border style="width: 100%; margin-bottom: 20px;">
           <el-table-column prop="aircraft_no" label="飞机编号" min-width="110" />
           <el-table-column prop="flight_count" label="飞行次数" min-width="90" />
@@ -71,9 +80,9 @@
           <template #empty>
             <el-empty description="暂无飞行使用记录" />
           </template>
-        </el-table>
+        </el-table></section>
 
-        <h3>完整生命周期时间轴</h3>
+        <section class="detail-block"><h3>完整生命周期时间轴</h3>
         <el-alert
           v-if="fullTimelineLoadFailed"
           title="完整时间轴未加载"
@@ -101,7 +110,7 @@
             </el-card>
           </el-timeline-item>
         </el-timeline>
-        <el-empty v-else description="暂无生命周期事件" />
+        <el-empty v-else description="暂无生命周期事件" /></section>
 
       </div>
     </el-drawer>
@@ -171,12 +180,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { getComponents, createComponent, getComponentProfile, getComponentFullTimeline, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
 import { getOperators } from '../api/operators'
 import { ElMessage } from 'element-plus'
 import {
   formatComponentCategory,
+  formatComponentStatus,
+  getComponentStatusType,
   formatLifecycleDetail,
   formatLifecycleEventType,
   formatLifecycleTitle
@@ -188,6 +199,7 @@ const modelList = ref([]) // 用于存放型号数据
 const operatorList = ref([])
 const loading = ref(false)
 const modelLoading = ref(false)
+const filters = reactive({ componentNo: '', modelCode: '', category: '', status: '', retired: '' })
 
 // 3. 定义获取型号的函数
 const fetchModels = async () => {
@@ -230,6 +242,18 @@ const getComponentModel = (modelId) => {
   return modelList.value.find(model => Number(model.model_id) === Number(modelId))
 }
 
+const includesText = (value, keyword) => String(value || '').toLowerCase().includes(String(keyword || '').trim().toLowerCase())
+const filteredComponents = computed(() => componentList.value.filter(item => {
+  const model = getComponentModel(item.model_id) || {}
+  return includesText(item.component_no, filters.componentNo)
+    && includesText(model.model_code, filters.modelCode)
+    && includesText(`${model.category || ''} ${formatComponentCategory(model.category)}`, filters.category)
+    && (!filters.status || item.status === filters.status)
+    && (filters.retired === '' || Boolean(item.is_retired) === filters.retired)
+}))
+const resetFilters = () => Object.assign(filters, { componentNo: '', modelCode: '', category: '', status: '', retired: '' })
+const refreshList = () => Promise.all([fetchList(), fetchModels()])
+
 const formatComponentModelOption = (model) => {
   return `${formatComponentCategory(model.category)} / ${model.model_code}`
 }
@@ -252,6 +276,9 @@ const profileData = ref({})
 const fullTimelineData = ref([])
 const fullTimelineLoadFailed = ref(false)
 const flightUsageData = ref([])
+const drawerComponentStatus = computed(() => profileData.value.status
+  || profileData.value.current_status
+  || componentList.value.find(item => item.component_no === currentComponentNo.value)?.status)
 
 const openProfileDrawer = async (component_no) => {
   currentComponentNo.value = component_no
@@ -402,6 +429,12 @@ const formatTime = (timeStr) => {
   gap: 8px;
   margin-bottom: 8px;
 }
+.drawer-heading { width: 100%; display: flex; align-items: center; justify-content: space-between; padding-right: 10px; }
+.drawer-heading small { color: #7d93a5; font-size: 10px; letter-spacing: 1.4px; }
+.drawer-heading h2 { margin: 5px 0 0; color: #123f63; }
+.detail-block { margin-bottom: 18px; padding: 18px; border: 1px solid #e2ecf3; border-radius: 12px; background: #fbfdff; transition: box-shadow .2s ease, transform .2s ease; }
+.detail-block:hover { box-shadow: 0 8px 22px rgba(21, 91, 139, .08); transform: translateY(-1px); }
+.detail-block h3 { margin: 0 0 14px; color: #17496d; font-size: 16px; }
 .header-action {
   display: flex;
   justify-content: space-between;
