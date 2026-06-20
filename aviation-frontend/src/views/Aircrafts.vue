@@ -26,7 +26,10 @@
             <p><strong>服役日期：</strong>{{ ac.start_date || '未登记' }}</p>
           </div>
 
-          <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+          <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+             <el-button size="small" type="primary" plain @click="openDetail(ac)">
+                详情
+             </el-button>
              <el-button 
                 size="small" 
                 v-if="ac.service_status !== 'maintenance' && ac.service_status !== 'retired'" 
@@ -49,6 +52,81 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-drawer
+      v-model="detailVisible"
+      :title="`飞机详情：${selectedAircraft.aircraft_no || ''}`"
+      size="60%"
+    >
+      <div v-loading="detailLoading">
+        <div class="detail-section-header">
+          <h3>飞机基础信息</h3>
+          <el-button type="primary" plain size="small" @click="loadAircraftInstallations">
+            刷新
+          </el-button>
+        </div>
+
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="飞机编号">
+            {{ selectedAircraft.aircraft_no || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="飞机型号">
+            {{ selectedAircraft.aircraft_model || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="当前状态">
+            <el-tag :type="getStatusType(selectedAircraft.service_status)">
+              {{ formatAircraftStatus(selectedAircraft.service_status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="投入使用日期">
+            {{ formatDate(selectedAircraft.start_date) }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="selectedAircraft.created_at" label="创建时间">
+            {{ formatDateTime(selectedAircraft.created_at) }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="selectedAircraft.remark" label="备注" :span="2">
+            {{ selectedAircraft.remark }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <h3 class="installation-title">当前安装部件</h3>
+        <el-alert
+          v-if="detailLoadFailed"
+          title="飞机部件详情加载失败"
+          type="error"
+          :closable="false"
+          show-icon
+        />
+        <el-table v-else :data="currentAircraftInstallations" border style="width: 100%">
+          <el-table-column label="安装位置" min-width="140">
+            <template #default="scope">
+              {{ scope.row.position_name || formatInstallPosition(scope.row.install_position) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="component_no" label="部件编号" min-width="110" />
+          <el-table-column prop="model_code" label="部件型号" min-width="110" />
+          <el-table-column label="部件类别" min-width="100">
+            <template #default="scope">{{ formatComponentCategory(scope.row.category) }}</template>
+          </el-table-column>
+          <el-table-column label="部件状态" min-width="100">
+            <template #default="scope">
+              <el-tag :type="getComponentStatusType(scope.row.component_status)">
+                {{ formatComponentStatus(scope.row.component_status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="安装时间" min-width="160">
+            <template #default="scope">{{ formatDateTime(scope.row.install_time) }}</template>
+          </el-table-column>
+          <el-table-column label="当前有效" width="90" align="center">
+            <template #default><el-tag type="success">是</el-tag></template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="暂无当前安装部件" />
+          </template>
+        </el-table>
+      </div>
+    </el-drawer>
 
     <el-dialog title="新增飞机" v-model="createVisible" width="450px">
       <el-form :model="createForm" label-width="100px">
@@ -73,12 +151,24 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getAircrafts, createAircraft, updateAircraftStatus } from '../api/aircrafts'
+import { getActiveInstallations } from '../api/installations'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  formatAircraftStatus,
+  formatComponentCategory,
+  formatComponentStatus,
+  formatInstallPosition
+} from '../utils/businessFormatters'
 // 引入 Element Plus 的图标
 import { Plus, Position } from '@element-plus/icons-vue'
 
 const aircraftList = ref([])
 const loading = ref(false)
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailLoadFailed = ref(false)
+const selectedAircraft = ref({})
+const currentAircraftInstallations = ref([])
 const createVisible = ref(false)
 const createForm = ref({
   aircraft_no: '',
@@ -130,15 +220,47 @@ const changeStatus = (aircraft_no, newStatus) => {
   }).catch(() => {})
 }
 
+const openDetail = (aircraft) => {
+  selectedAircraft.value = { ...aircraft }
+  currentAircraftInstallations.value = []
+  detailLoadFailed.value = false
+  detailVisible.value = true
+  loadAircraftInstallations()
+}
+
+const loadAircraftInstallations = async () => {
+  if (!selectedAircraft.value.aircraft_no) return
+  detailLoading.value = true
+  detailLoadFailed.value = false
+  try {
+    const rows = await getActiveInstallations()
+    currentAircraftInstallations.value = (Array.isArray(rows) ? rows : []).filter(
+      item => item.aircraft_no === selectedAircraft.value.aircraft_no
+    )
+  } catch {
+    currentAircraftInstallations.value = []
+    detailLoadFailed.value = true
+  } finally {
+    detailLoading.value = false
+  }
+}
+
 // 飞机状态显示
 const translateStatus = (status) => {
-  const map = {
-    'active': '服役中',
-    'maintenance': '维修中',
-    'retired': '已退役'
-  }
-  return map[status] || status
+  return formatAircraftStatus(status)
 }
+
+const getComponentStatusType = (status) => ({
+  in_stock: 'info',
+  available: 'success',
+  installed: 'primary',
+  removed: 'warning',
+  under_maintenance: 'warning',
+  retired: 'danger'
+}[status] || 'info')
+
+const formatDate = (value) => value ? String(value).slice(0, 10) : '未登记'
+const formatDateTime = (value) => value ? String(value).replace('T', ' ').slice(0, 19) : '未登记'
 
 const getStatusType = (status) => {
   const map = {
@@ -165,5 +287,19 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+.detail-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.detail-section-header h3,
+.installation-title {
+  margin: 0;
+}
+.installation-title {
+  margin-top: 24px;
+  margin-bottom: 14px;
 }
 </style>

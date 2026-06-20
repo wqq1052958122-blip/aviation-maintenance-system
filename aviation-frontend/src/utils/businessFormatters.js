@@ -64,6 +64,23 @@ const categoryMap = {
 
 export const formatComponentCategory = (value) => categoryMap[normalize(value)] || (normalize(value) === 'n/a' ? '未填写类别' : value || '-')
 
+export const formatAircraftStatus = (value) => ({
+  active: '服役中',
+  maintenance: '维修中',
+  retired: '已退役'
+}[normalize(value)] || value || '-')
+
+export const formatComponentStatus = (value) => ({
+  in_stock: '在库',
+  available: '可用',
+  installed: '已安装',
+  removed: '已拆卸',
+  under_maintenance: '维修中',
+  retired: '已退役'
+}[normalize(value)] || value || '-')
+
+export const formatInstallPosition = (value) => positionMap[normalize(value)] || value || '-'
+
 export const formatMaintenanceType = (value) => maintenanceTypeMap[normalize(value)] || value || '-'
 
 export const formatPlanType = (value) => formatMaintenanceType(value)
@@ -127,7 +144,7 @@ export const formatBusinessText = (value) => {
   return value || '-'
 }
 
-const formatPosition = (value) => positionMap[normalize(value)] || (normalize(value) === 'n/a' ? '未记录位置' : value || '-')
+const formatPosition = (value) => normalize(value) === 'n/a' ? '未记录位置' : formatInstallPosition(value)
 const formatCategory = (value) => formatComponentCategory(value)
 const formatPerson = (value) => normalize(value) === 'n/a' ? '未记录' : value || '未记录'
 
