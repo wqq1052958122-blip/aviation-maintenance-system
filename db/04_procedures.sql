@@ -9,6 +9,7 @@ DELIMITER $$
 
 DROP PROCEDURE IF EXISTS sp_replace_component$$
 DROP PROCEDURE IF EXISTS sp_retire_component$$
+DROP PROCEDURE IF EXISTS sp_start_maintenance_plan$$
 DROP PROCEDURE IF EXISTS sp_complete_maintenance$$
 
 CREATE PROCEDURE sp_replace_component(
@@ -49,12 +50,17 @@ BEGIN
 
     SELECT COUNT(*) INTO v_old_count FROM Component WHERE component_no = p_old_component_no;
     IF v_old_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Old component does not exist.'; END IF;
-    SELECT component_id INTO v_old_component_id FROM Component WHERE component_no = p_old_component_no;
+    SELECT component_id INTO v_old_component_id
+    FROM Component
+    WHERE component_no = p_old_component_no
+    FOR UPDATE;
 
     SELECT COUNT(*) INTO v_new_count FROM Component WHERE component_no = p_new_component_no;
     IF v_new_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'New component does not exist.'; END IF;
     SELECT component_id, status, is_retired INTO v_new_component_id, v_new_status, v_new_is_retired
-    FROM Component WHERE component_no = p_new_component_no;
+    FROM Component
+    WHERE component_no = p_new_component_no
+    FOR UPDATE;
 
     IF v_old_component_id = v_new_component_id THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Old component and new component cannot be the same.';
@@ -62,7 +68,10 @@ BEGIN
 
     SELECT COUNT(*) INTO v_aircraft_count FROM Aircraft WHERE aircraft_no = p_aircraft_no;
     IF v_aircraft_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft does not exist.'; END IF;
-    SELECT aircraft_id INTO v_aircraft_id FROM Aircraft WHERE aircraft_no = p_aircraft_no;
+    SELECT aircraft_id INTO v_aircraft_id
+    FROM Aircraft
+    WHERE aircraft_no = p_aircraft_no
+    FOR UPDATE;
 
     SELECT COUNT(*) INTO v_position_count
     FROM AircraftInstallPosition
@@ -79,7 +88,8 @@ BEGIN
     WHERE aircraft_id = v_aircraft_id
       AND position_code = p_install_position
       AND is_active = TRUE
-    LIMIT 1;
+    LIMIT 1
+    FOR UPDATE;
 
     SELECT COUNT(*) INTO v_operator_count FROM Operator WHERE operator_id = p_operator_id;
     IF v_operator_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Operator does not exist.'; END IF;
@@ -103,7 +113,8 @@ BEGIN
       AND position_id = v_position_id
       AND uninstall_time IS NULL
       AND install_time <= v_replace_time
-    LIMIT 1;
+    LIMIT 1
+    FOR UPDATE;
 
     IF v_new_status NOT IN ('in_stock', 'available') OR v_new_is_retired = TRUE THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'New component is not installable.';
@@ -180,7 +191,9 @@ BEGIN
     SELECT COUNT(*) INTO v_component_count FROM Component WHERE component_no = p_component_no;
     IF v_component_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Component does not exist.'; END IF;
     SELECT component_id, status, is_retired INTO v_component_id, v_component_status, v_is_retired
-    FROM Component WHERE component_no = p_component_no;
+    FROM Component
+    WHERE component_no = p_component_no
+    FOR UPDATE;
 
     SELECT COUNT(*) INTO v_operator_count FROM Operator WHERE operator_id = p_approved_by;
     IF v_operator_count = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Approver does not exist.'; END IF;
@@ -216,6 +229,99 @@ BEGIN
     COMMIT;
 END$$
 
+CREATE PROCEDURE sp_start_maintenance_plan(
+    IN p_plan_id INT,
+    IN p_start_time DATETIME,
+    IN p_technician_id INT,
+    IN p_description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+)
+BEGIN
+    DECLARE v_plan_count INT DEFAULT 0;
+    DECLARE v_component_id INT;
+    DECLARE v_component_no VARCHAR(50);
+    DECLARE v_planned_type VARCHAR(50);
+    DECLARE v_plan_status VARCHAR(30);
+    DECLARE v_related_maintenance_id INT;
+    DECLARE v_technician_count INT DEFAULT 0;
+    DECLARE v_maintenance_id INT;
+    DECLARE v_start_time DATETIME;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    SET v_start_time = COALESCE(p_start_time, NOW());
+    START TRANSACTION;
+
+    SELECT COUNT(*) INTO v_plan_count
+    FROM MaintenancePlan
+    WHERE plan_id = p_plan_id;
+
+    IF v_plan_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan does not exist.';
+    END IF;
+
+    SELECT mp.component_id, c.component_no, mp.planned_type,
+           mp.status, mp.related_maintenance_id
+    INTO v_component_id, v_component_no, v_planned_type,
+         v_plan_status, v_related_maintenance_id
+    FROM MaintenancePlan mp
+    JOIN Component c ON mp.component_id = c.component_id
+    WHERE mp.plan_id = p_plan_id
+    FOR UPDATE;
+
+    IF v_plan_status <> 'pending' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only pending maintenance plans can be started.';
+    END IF;
+
+    IF v_related_maintenance_id IS NOT NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maintenance plan has already been started.';
+    END IF;
+
+    SELECT COUNT(*) INTO v_technician_count
+    FROM Operator
+    WHERE operator_id = p_technician_id
+      AND role = 'technician';
+
+    IF v_technician_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only technician can start maintenance plan execution.';
+    END IF;
+
+    INSERT INTO MaintenanceRecord (
+        component_id, maintenance_type, start_time, end_time,
+        result, description, technician_id
+    ) VALUES (
+        v_component_id, v_planned_type, v_start_time, NULL,
+        'pending', p_description, p_technician_id
+    );
+
+    SET v_maintenance_id = LAST_INSERT_ID();
+
+    UPDATE MaintenancePlan
+    SET related_maintenance_id = v_maintenance_id
+    WHERE plan_id = p_plan_id;
+
+    INSERT INTO AuditLog (
+        operator_id, operation_type, target_table, target_id,
+        operation_time, operation_detail
+    ) VALUES (
+        p_technician_id,
+        'maintenance_plan_started',
+        'MaintenancePlan',
+        p_plan_id,
+        v_start_time,
+        CONCAT(
+            'Started maintenance plan for component ', v_component_no,
+            '; maintenance_id: ', v_maintenance_id,
+            '; type: ', v_planned_type
+        )
+    );
+
+    COMMIT;
+END$$
+
 CREATE PROCEDURE sp_complete_maintenance(
     IN p_maintenance_id INT,
     IN p_end_time DATETIME,
@@ -233,6 +339,8 @@ BEGIN
     DECLARE v_end_time DATETIME;
     DECLARE v_operator_count INT DEFAULT 0;
     DECLARE v_active_install_count INT DEFAULT 0;
+    DECLARE v_rework_plan_id INT DEFAULT NULL;
+    DECLARE v_related_plan_id INT DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -250,7 +358,8 @@ BEGIN
     INTO v_component_id, v_component_no, v_start_time, v_old_result
     FROM MaintenanceRecord mr
     JOIN Component c ON mr.component_id = c.component_id
-    WHERE mr.maintenance_id = p_maintenance_id;
+    WHERE mr.maintenance_id = p_maintenance_id
+    FOR UPDATE;
 
     IF v_old_result <> 'pending' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only pending maintenance can be completed.';
@@ -273,6 +382,15 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only approver can approve maintenance completion';
     END IF;
 
+    SELECT COUNT(*) INTO v_active_install_count
+    FROM InstallationRecord
+    WHERE component_id = v_component_id
+      AND uninstall_time IS NULL;
+
+    IF p_result = 'scrapped' AND v_active_install_count > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Installed component must be uninstalled before scrapping.';
+    END IF;
+
     UPDATE MaintenanceRecord
     SET end_time = v_end_time,
         result = p_result,
@@ -280,20 +398,94 @@ BEGIN
     WHERE maintenance_id = p_maintenance_id;
 
     IF p_result = 'passed' THEN
-        SELECT COUNT(*) INTO v_active_install_count
-        FROM InstallationRecord
-        WHERE component_id = v_component_id
-          AND uninstall_time IS NULL;
-
         UPDATE Component
         SET status = IF(v_active_install_count > 0, 'installed', 'available')
         WHERE component_id = v_component_id
           AND is_retired = FALSE;
     ELSEIF p_result = 'failed' THEN
-        UPDATE Component SET status = 'removed' WHERE component_id = v_component_id AND is_retired = FALSE;
+        IF v_active_install_count > 0 THEN
+            UPDATE Aircraft a
+            JOIN InstallationRecord ir ON ir.aircraft_id = a.aircraft_id
+            SET a.service_status = 'maintenance'
+            WHERE ir.component_id = v_component_id
+              AND ir.uninstall_time IS NULL
+              AND a.service_status <> 'retired';
+        ELSE
+            UPDATE Component
+            SET status = 'removed'
+            WHERE component_id = v_component_id
+              AND is_retired = FALSE;
+        END IF;
+
+        INSERT INTO MaintenancePlan (
+            component_id, planned_type, planned_time, planned_reason,
+            status, created_by, related_maintenance_id
+        )
+        SELECT
+            v_component_id,
+            IF(v_active_install_count > 0, 'post_removal_inspection', 'repair'),
+            v_end_time,
+            IF(
+                v_active_install_count > 0,
+                'Online inspection failed; remove component before workshop maintenance',
+                'Maintenance failed; rework is required'
+            ),
+            'pending',
+            p_approved_by,
+            p_maintenance_id
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM MaintenancePlan
+            WHERE component_id = v_component_id
+              AND status = 'pending'
+              AND planned_type = IF(v_active_install_count > 0, 'post_removal_inspection', 'repair')
+        );
+
+        IF ROW_COUNT() > 0 THEN
+            SET v_rework_plan_id = LAST_INSERT_ID();
+            INSERT INTO AuditLog (
+                operator_id, operation_type, target_table, target_id,
+                operation_time, operation_detail
+            ) VALUES (
+                p_approved_by,
+                'create_maintenance_plan',
+                'MaintenancePlan',
+                v_rework_plan_id,
+                v_end_time,
+                CONCAT('Created rework plan after failed maintenance for component ', v_component_no)
+            );
+        END IF;
     ELSEIF p_result = 'scrapped' THEN
         INSERT INTO RetirementRecord (component_id, retirement_time, retirement_reason, approved_by, remark)
         VALUES (v_component_id, v_end_time, COALESCE(p_retirement_reason, 'scrapped after maintenance'), p_approved_by, 'retired by sp_complete_maintenance');
+    END IF;
+
+    SELECT MAX(plan_id) INTO v_related_plan_id
+    FROM MaintenancePlan
+    WHERE related_maintenance_id = p_maintenance_id
+      AND status = 'pending';
+
+    IF v_related_plan_id IS NOT NULL THEN
+        UPDATE MaintenancePlan
+        SET status = 'completed',
+            completed_at = v_end_time
+        WHERE plan_id = v_related_plan_id;
+
+        INSERT INTO AuditLog (
+            operator_id, operation_type, target_table, target_id,
+            operation_time, operation_detail
+        ) VALUES (
+            p_approved_by,
+            'maintenance_plan_completed',
+            'MaintenancePlan',
+            v_related_plan_id,
+            v_end_time,
+            CONCAT(
+                'Completed maintenance plan for component ', v_component_no,
+                '; maintenance_id: ', p_maintenance_id,
+                '; result: ', p_result
+            )
+        );
     END IF;
 
     INSERT INTO AuditLog (

@@ -12,12 +12,11 @@
         <el-form-item label="飞机编号"><el-input v-model="filters.aircraftNo" clearable placeholder="输入飞机编号" style="width: 160px" /></el-form-item>
         <el-form-item label="部件编号"><el-input v-model="filters.componentNo" clearable placeholder="输入部件编号" style="width: 160px" /></el-form-item>
         <el-form-item label="安装位置"><el-input v-model="filters.position" clearable placeholder="输入安装位置" style="width: 170px" /></el-form-item>
-        <el-form-item label="记录范围"><el-select v-model="filters.scope" placeholder="全部记录" style="width: 150px"><el-option label="全部记录" value="all" /><el-option label="当前安装" value="current" /><el-option label="历史安装" value="history" /></el-select></el-form-item>
-        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchData">刷新</el-button></div></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary" @click="applyFilters">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchData">刷新</el-button></div></el-form-item>
       </el-form>
     </div>
     
-    <el-table :data="filteredInstallations" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
+    <el-table :data="pagedInstallations" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="aircraft_no" label="飞机编号" />
       <el-table-column prop="install_position" label="安装位置">
   <template #default="scope">
@@ -41,6 +40,7 @@
       </el-table-column>
       <template #empty><el-empty description="暂无数据" /></template>
     </el-table>
+    <ListPagination v-model:page="currentPage" v-model:page-size="pageSize" :total="filteredInstallations.length" />
 
     <!-- 新增安装弹窗 -->
     <el-dialog title="新增部件安装" v-model="installDialogVisible" width="500px">
@@ -92,7 +92,7 @@
       </el-form>
       <template #footer>
         <el-button @click="installDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleInstall">确认安装</el-button>
+        <el-button type="primary" :loading="actionSubmitting" @click="handleInstall">确认安装</el-button>
       </template>
     </el-dialog>
 
@@ -125,7 +125,7 @@
       </el-form>
       <template #footer>
         <el-button @click="uninstallDialogVisible = false">取消</el-button>
-        <el-button type="warning" @click="handleUninstall">确认拆卸</el-button>
+        <el-button type="warning" :loading="actionSubmitting" @click="handleUninstall">确认拆卸</el-button>
       </template>
     </el-dialog>
 
@@ -156,19 +156,20 @@
       </el-form>
       <template #footer>
         <el-button @click="replaceDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleReplace">确认更换</el-button>
+        <el-button type="primary" :loading="actionSubmitting" @click="handleReplace">确认更换</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { getActiveInstallations, getInstallPositions, installComponent, uninstallComponent, replaceComponent } from '../api/installations'
 import { ElMessage } from 'element-plus'
 import { getOperators } from '../api/operators' // 引入接口
 import { formatComponentCategory, formatComponentStatus, formatInstallPosition, getComponentStatusType } from '../utils/businessFormatters'
+import ListPagination from '../components/ListPagination.vue'
 
 const operatorList = ref([]) // 存下拉框的数据
 const installPositionOptions = ref([])
@@ -186,10 +187,10 @@ const getDefaultOperatorId = (role) => {
 
 // 在 onMounted 里调用它：
 onMounted(async () => {
-  fetchData() // 之前的加载列表
-  // 顺便把系统所有人员查出来
-  const res = await getOperators()
-  operatorList.value = res.data || res || []
+  await Promise.allSettled([
+    fetchData(),
+    getOperators().then(res => { operatorList.value = res.data || res || [] })
+  ])
 })
 
 const translateComponentStatus = (status) => formatComponentStatus(status)
@@ -199,16 +200,32 @@ const translatePosition = (pos) => formatInstallPosition(pos)
 
 const installations = ref([])
 const loading = ref(false)
-const filters = reactive({ aircraftNo: '', componentNo: '', position: '', scope: 'all' })
+const actionSubmitting = ref(false)
+const filters = reactive({ aircraftNo: '', componentNo: '', position: '' })
+const appliedFilters = reactive({ ...filters })
+const currentPage = ref(1)
+const pageSize = ref(10)
 const includesText = (value, keyword) => String(value || '').toLowerCase().includes(String(keyword || '').trim().toLowerCase())
 const filteredInstallations = computed(() => installations.value.filter(item => {
-  const isCurrent = !item.uninstall_time
-  return includesText(item.aircraft_no, filters.aircraftNo)
-    && includesText(item.component_no, filters.componentNo)
-    && includesText(`${item.install_position || ''} ${translatePosition(item.install_position)}`, filters.position)
-    && (filters.scope === 'all' || (filters.scope === 'current' ? isCurrent : !isCurrent))
+  return includesText(item.aircraft_no, appliedFilters.aircraftNo)
+    && includesText(item.component_no, appliedFilters.componentNo)
+    && includesText(`${item.install_position || ''} ${translatePosition(item.install_position)}`, appliedFilters.position)
 }))
-const resetFilters = () => Object.assign(filters, { aircraftNo: '', componentNo: '', position: '', scope: 'all' })
+const pagedInstallations = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredInstallations.value.slice(start, start + pageSize.value)
+})
+watch(() => filteredInstallations.value.length, total => {
+  currentPage.value = Math.min(currentPage.value, Math.max(1, Math.ceil(total / pageSize.value)))
+})
+const applyFilters = () => {
+  Object.assign(appliedFilters, filters)
+  currentPage.value = 1
+}
+const resetFilters = () => {
+  Object.assign(filters, { aircraftNo: '', componentNo: '', position: '' })
+  applyFilters()
+}
 
 const installDialogVisible = ref(false)
 const installForm = ref({
@@ -235,8 +252,13 @@ const replaceForm = ref({})
 
 const fetchData = async () => {
   loading.value = true
-  installations.value = await getActiveInstallations()
-  loading.value = false
+  try {
+    installations.value = await getActiveInstallations()
+  } catch {
+    installations.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
 const loadInstallPositions = async (resetSelected = true) => {
@@ -274,12 +296,16 @@ const handleInstall = async () => {
     ElMessage.warning('请选择安装人员')
     return
   }
+  if (actionSubmitting.value) return
+  actionSubmitting.value = true
   try {
     await installComponent(installForm.value)
     ElMessage.success('安装成功！')
     installDialogVisible.value = false
     fetchData()
-  } catch {}
+  } catch {} finally {
+    actionSubmitting.value = false
+  }
 }
 
 const openUninstallDialog = (row) => {
@@ -304,6 +330,8 @@ const handleUninstall = async () => {
     ElMessage.warning('请选择拆卸人员')
     return
   }
+  if (actionSubmitting.value) return
+  actionSubmitting.value = true
   try {
     await uninstallComponent(uninstallForm.value.installation_id, {
       uninstall_time: uninstallForm.value.uninstall_time,
@@ -313,7 +341,9 @@ const handleUninstall = async () => {
     ElMessage.success('拆卸成功')
     uninstallDialogVisible.value = false
     fetchData()
-  } catch {}
+  } catch {} finally {
+    actionSubmitting.value = false
+  }
 }
 
 const openReplaceDialog = (row) => {
@@ -336,12 +366,16 @@ const handleReplace = async () => {
     ElMessage.warning('请填写新部件编号并选择更换操作人员')
     return
   }
+  if (actionSubmitting.value) return
+  actionSubmitting.value = true
   try {
     await replaceComponent(replaceForm.value);
     ElMessage.success('更换成功！');
     replaceDialogVisible.value = false;
     fetchData();
-  } catch {}
+  } catch {} finally {
+    actionSubmitting.value = false
+  }
 }
 
 const formatDateTime = (date) => {

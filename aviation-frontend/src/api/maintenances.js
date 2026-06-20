@@ -23,7 +23,7 @@ export function getAllMaintenances() {
   return request.get('/maintenances')
 }
 
-// 查询待执行维修计划
+// 查询全部维修计划
 export function getMaintenancePlans() {
   return request.get('/maintenance-plans')
 }
@@ -31,6 +31,11 @@ export function getMaintenancePlans() {
 // 创建维修计划
 export function createMaintenancePlan(data) {
   return request.post('/maintenance-plans', data)
+}
+
+// 开始执行维修计划并创建关联维修工单
+export function startMaintenancePlan(plan_id, data) {
+  return request.post(`/maintenance-plans/${plan_id}/start`, data)
 }
 
 // 完成维修计划

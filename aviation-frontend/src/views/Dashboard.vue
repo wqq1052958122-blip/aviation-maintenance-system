@@ -7,9 +7,9 @@
         <p>实时查看部件寿命风险、维修计划、审计日志与数据库健康状态</p>
       </div>
       <div class="welcome-summary">
-        <div><strong>{{ summaryData.aircraftCount }}</strong><span>在役飞机</span></div>
-        <div><strong>{{ summaryData.stockCount }}</strong><span>库存部件</span></div>
-        <div><strong>{{ summaryData.maintenanceCount }}</strong><span>维修工单</span></div>
+        <div><strong>{{ summaryLoaded ? summaryData.aircraftCount : '--' }}</strong><span>在役飞机</span></div>
+        <div><strong>{{ summaryLoaded ? summaryData.stockCount : '--' }}</strong><span>库存部件</span></div>
+        <div><strong>{{ summaryLoaded ? summaryData.maintenanceCount : '--' }}</strong><span>维修工单</span></div>
       </div>
     </section>
 
@@ -19,6 +19,15 @@
         <div><span>{{ item.label }}</span><strong>{{ item.loaded ? item.value : '未加载' }}</strong><small>{{ item.description }}</small></div>
       </article>
     </section>
+
+    <el-card class="dashboard-section analysis-overview" shadow="never">
+      <template #header><div class="card-title"><div><span>数据库深度分析</span><small>由三类统计视图提供</small></div><el-button type="primary" link @click="openAnalysis">查看分析详情 →</el-button></div></template>
+      <div class="analysis-cards">
+        <article class="analysis-card"><span>周期维修关注部件</span><strong>{{ analysisLoaded.due ? maintenanceDueCount : '--' }}</strong><small>到期或接近维修周期</small></article>
+        <article class="analysis-card"><span>最高位置更换次数</span><strong>{{ analysisLoaded.replacement ? topReplacementCount : '--' }}</strong><small>{{ analysisLoaded.replacement ? topReplacementLabel : '识别高频更换飞机位置' }}</small></article>
+        <article class="analysis-card"><span>平均维修间隔</span><strong>{{ analysisLoaded.interval ? `${averageMaintenanceInterval}h` : '--' }}</strong><small>基于已完成维修历史</small></article>
+      </div>
+    </el-card>
 
     <el-card class="dashboard-section" shadow="never">
       <template #header>
@@ -76,7 +85,7 @@
       <el-card class="audit-card" shadow="never">
         <template #header><span>最近关键操作</span></template>
         <div class="audit-toolbar">
-          <el-select v-model="auditFilters.operationType" clearable placeholder="全部操作类型"><el-option label="部件更换" value="replace_component" /><el-option label="部件退役" value="retire_component" /><el-option label="完成维修" value="complete_maintenance" /><el-option label="创建维修计划" value="create_maintenance_plan" /><el-option label="完成维修计划" value="complete_maintenance_plan" /><el-option label="取消维修计划" value="cancel_maintenance_plan" /></el-select>
+          <el-select v-model="auditFilters.operationType" clearable placeholder="全部操作类型"><el-option label="部件更换" value="replace_component" /><el-option label="部件退役" value="retire_component" /><el-option label="完成维修" value="complete_maintenance" /><el-option label="创建维修计划" value="create_maintenance_plan" /><el-option label="开始执行维修计划" value="start_maintenance_plan" /><el-option label="完成维修计划" value="complete_maintenance_plan" /><el-option label="取消维修计划" value="cancel_maintenance_plan" /><el-option label="寿命到限停场" value="life_limit_grounding" /></el-select>
           <el-input v-model="auditFilters.operator" clearable placeholder="操作人员关键词" />
           <el-button @click="resetAuditFilters">重置</el-button><el-button type="primary" @click="fetchRecentAuditLogs">刷新</el-button>
         </div>
@@ -90,17 +99,49 @@
         <el-empty v-else description="暂无审计日志" :image-size="70" />
       </el-card>
     </section>
+
+    <el-drawer v-model="analysisDialogVisible" title="数据库分析详情" size="72%">
+      <el-tabs v-model="analysisTab">
+        <el-tab-pane label="周期维修预警" name="due">
+          <el-table :data="maintenanceDueData" border max-height="520">
+            <el-table-column prop="component_no" label="部件编号" /><el-table-column prop="model_code" label="型号" />
+            <el-table-column prop="maintenance_cycle_hours" label="维修周期(h)" /><el-table-column prop="hours_since_last_maintenance" label="维修后已用(h)" />
+            <el-table-column prop="remaining_maintenance_hours" label="剩余周期(h)" /><el-table-column label="周期使用率" min-width="145"><template #default="scope"><el-progress :percentage="toPercentage(scope.row.maintenance_usage_ratio)" /></template></el-table-column><el-table-column label="状态"><template #default="scope"><el-tag :type="getDueType(scope.row.maintenance_due_level)">{{ formatDueLevel(scope.row.maintenance_due_level) }}</el-tag></template></el-table-column>
+            <template #empty><el-empty description="暂无周期维修分析数据" /></template>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="飞机部件更换频率" name="replacement">
+          <div ref="replacementAnalysisChartRef" class="analysis-chart"></div>
+          <el-table :data="replacementStats" border max-height="520">
+            <el-table-column prop="aircraft_no" label="飞机编号" /><el-table-column prop="aircraft_model" label="机型" /><el-table-column label="安装位置" min-width="150"><template #default="scope">{{ formatInstallPosition(scope.row.install_position) }}</template></el-table-column>
+            <el-table-column prop="installation_count" label="累计安装" /><el-table-column prop="removal_count" label="拆卸次数" /><el-table-column prop="replacement_count" label="更换次数" />
+            <template #empty><el-empty description="暂无更换频率数据" /></template>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="部件维修间隔" name="interval">
+          <div class="analysis-summary">总体平均维修间隔：<strong>{{ averageMaintenanceInterval }} 小时</strong></div>
+          <div ref="intervalAnalysisChartRef" class="analysis-chart"></div>
+          <el-table :data="maintenanceIntervals" border max-height="520">
+            <el-table-column prop="component_no" label="部件编号" /><el-table-column prop="model_code" label="型号" /><el-table-column label="维修类型"><template #default="scope">{{ formatMaintenanceType(scope.row.maintenance_type) }}</template></el-table-column>
+            <el-table-column label="本次结束"><template #default="scope">{{ formatTime(scope.row.end_time) }}</template></el-table-column><el-table-column prop="maintenance_interval_hours" label="间隔(h)" />
+            <template #empty><el-empty description="暂无可计算的维修间隔" /></template>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { getRecentAuditLogs } from '../api/auditLogs'
 import {
   formatAuditDetail,
   formatAuditOperationType,
   formatComponentCategory,
+  formatInstallPosition,
+  formatMaintenanceType,
   formatRetirementReason,
   formatWarningLevel,
   getWarningStatusType
@@ -108,7 +149,10 @@ import {
 import { getComponents } from '../api/components'
 import { getMaintenancePlans } from '../api/maintenances'
 import {
+  getAircraftComponentReplacements,
   getComponentLifeWarning,
+  getComponentMaintenanceDue,
+  getComponentMaintenanceInterval,
   getDashboardStats,
   getDbIntegrityChecks,
   getRetirementReasonStats,
@@ -132,8 +176,18 @@ const maintenanceComponentCount = ref(0)
 const pendingPlanCount = ref(0)
 const recentAuditLogs = ref([])
 const auditFilters = reactive({ operationType: '', operator: '' })
+const normalizeAuditOperationType = (value) => ({
+  component_replacement: 'replace_component',
+  component_retirement: 'retire_component',
+  maintenance_completion: 'complete_maintenance',
+  maintenance_plan_created: 'create_maintenance_plan',
+  create_maintenance_plan: 'create_maintenance_plan',
+  maintenance_plan_started: 'start_maintenance_plan',
+  maintenance_plan_completed: 'complete_maintenance_plan',
+  maintenance_plan_cancelled: 'cancel_maintenance_plan'
+}[value] || value)
 const filteredAuditLogs = computed(() => recentAuditLogs.value.filter(item =>
-  (!auditFilters.operationType || item.operation_type === auditFilters.operationType)
+  (!auditFilters.operationType || normalizeAuditOperationType(item.operation_type) === auditFilters.operationType)
   && String(item.operator_name || '').toLowerCase().includes(auditFilters.operator.trim().toLowerCase())
 ).slice(0, 5))
 const resetAuditFilters = () => Object.assign(auditFilters, { operationType: '', operator: '' })
@@ -152,18 +206,39 @@ const integrityItems = [
 const riskCards = computed(() => {
   const databaseIssueCount = Object.values(integrityChecks.value).reduce((sum, value) => sum + (Number(value) || 0), 0)
   return [
-    { key: 'critical', label: '严重寿命风险', value: lifeWarningData.value.filter(item => item.warning_level === 'critical').length, loaded: lifeWarningLoaded.value, tone: 'danger', symbol: '!' , description: '使用比例达到严重阈值' },
+    { key: 'critical', label: '严重寿命风险', value: lifeWarningData.value.filter(item => ['critical', 'expired'].includes(item.warning_level)).length, loaded: lifeWarningLoaded.value, tone: 'danger', symbol: '!' , description: '严重预警或已经达到寿命上限' },
     { key: 'warning', label: '预警部件', value: lifeWarningData.value.filter(item => item.warning_level === 'warning').length, loaded: lifeWarningLoaded.value, tone: 'warning', symbol: '△', description: '需要关注剩余寿命' },
     { key: 'maintenance', label: '维修中部件', value: maintenanceComponentCount.value, loaded: componentRiskLoaded.value, tone: 'primary', symbol: 'M', description: '当前处于维修状态' },
     { key: 'plans', label: '待执行维修计划', value: pendingPlanCount.value, loaded: maintenancePlanLoaded.value, tone: 'warning', symbol: 'P', description: '等待安排执行' },
     { key: 'database', label: '数据库异常数', value: databaseIssueCount, loaded: integrityLoaded.value, tone: databaseIssueCount > 0 ? 'danger' : 'success', symbol: 'DB', description: '一致性规则检查汇总' }
   ]
 })
+const summaryLoaded = ref(false)
+const maintenanceDueData = ref([])
+const replacementStats = ref([])
+const maintenanceIntervals = ref([])
+const analysisLoaded = reactive({ due: false, replacement: false, interval: false })
+const analysisDialogVisible = ref(false)
+const analysisTab = ref('due')
+const maintenanceDueCount = computed(() => maintenanceDueData.value.filter(item => ['due', 'overdue'].includes(item.maintenance_due_level)).length)
+const topReplacementCount = computed(() => Math.max(0, ...replacementStats.value.map(item => Number(item.replacement_count) || 0)))
+const topReplacementLabel = computed(() => {
+  const row = [...replacementStats.value].sort((a, b) => Number(b.replacement_count) - Number(a.replacement_count))[0]
+  return row ? `${row.aircraft_no} · ${formatInstallPosition(row.install_position)}` : '暂无更换记录'
+})
+const averageMaintenanceInterval = computed(() => {
+  const values = maintenanceIntervals.value.map(item => Number(item.maintenance_interval_hours)).filter(Number.isFinite)
+  return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0
+})
 
 const maintenanceChartRef = ref(null)
 const retirementChartRef = ref(null)
+const replacementAnalysisChartRef = ref(null)
+const intervalAnalysisChartRef = ref(null)
 let maintenanceChart = null
 let retirementChart = null
+let replacementAnalysisChart = null
+let intervalAnalysisChart = null
 
 const initMaintenanceChart = (rows) => {
   if (!maintenanceChartRef.value) return
@@ -211,6 +286,42 @@ const initRetirementChart = (rows) => {
   }, true)
 }
 
+const initReplacementAnalysisChart = () => {
+  if (!replacementAnalysisChartRef.value) return
+  replacementAnalysisChart ||= echarts.init(replacementAnalysisChartRef.value)
+  const rows = [...replacementStats.value].sort((a, b) => Number(b.replacement_count) - Number(a.replacement_count)).slice(0, 8).reverse()
+  replacementAnalysisChart.setOption({
+    title: { text: '高频更换位置 Top 8', left: 'center' },
+    tooltip: { trigger: 'axis' },
+    grid: { left: 170, right: 35, top: 50, bottom: 25 },
+    xAxis: { type: 'value', name: '更换次数', minInterval: 1 },
+    yAxis: { type: 'category', data: rows.map(item => `${item.aircraft_no} · ${formatInstallPosition(item.install_position)}`) },
+    series: [{ type: 'bar', data: rows.map(item => Number(item.replacement_count) || 0), itemStyle: { color: '#2587c8', borderRadius: [0, 5, 5, 0] }, label: { show: true, position: 'right' } }]
+  }, true)
+}
+
+const initIntervalAnalysisChart = () => {
+  if (!intervalAnalysisChartRef.value) return
+  intervalAnalysisChart ||= echarts.init(intervalAnalysisChartRef.value)
+  const groups = new Map()
+  maintenanceIntervals.value.forEach(item => {
+    const value = Number(item.maintenance_interval_hours)
+    if (!Number.isFinite(value)) return
+    const values = groups.get(item.model_code) || []
+    values.push(value)
+    groups.set(item.model_code, values)
+  })
+  const rows = [...groups.entries()].map(([model, values]) => ({ model, average: Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) }))
+  intervalAnalysisChart.setOption({
+    title: { text: '各型号平均维修间隔', left: 'center' },
+    tooltip: { trigger: 'axis' },
+    grid: { left: 55, right: 25, top: 50, bottom: 55 },
+    xAxis: { type: 'category', data: rows.map(item => item.model), axisLabel: { rotate: 25 } },
+    yAxis: { type: 'value', name: '小时' },
+    series: [{ type: 'bar', data: rows.map(item => item.average), itemStyle: { color: '#45a879', borderRadius: [5, 5, 0, 0] }, label: { show: true, position: 'top' } }]
+  }, true)
+}
+
 const fetchMaintenanceStats = async () => {
   const rows = await getDashboardStats()
   initMaintenanceChart(Array.isArray(rows) ? rows : [])
@@ -223,6 +334,7 @@ const fetchSummaryData = async () => {
     stockCount: Number(data?.stock_count) || 0,
     maintenanceCount: Number(data?.maintenance_count) || 0
   }
+  summaryLoaded.value = true
 }
 
 const fetchLifeWarnings = async () => {
@@ -272,6 +384,34 @@ const fetchRecentAuditLogs = async () => {
   }
 }
 
+const fetchDatabaseAnalytics = async () => {
+  const results = await Promise.allSettled([
+    getComponentMaintenanceDue(),
+    getAircraftComponentReplacements(),
+    getComponentMaintenanceInterval()
+  ])
+  const targets = [maintenanceDueData, replacementStats, maintenanceIntervals]
+  const keys = ['due', 'replacement', 'interval']
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      targets[index].value = Array.isArray(result.value) ? result.value : []
+      analysisLoaded[keys[index]] = true
+    }
+  })
+}
+
+const openAnalysis = () => {
+  analysisTab.value = 'due'
+  analysisDialogVisible.value = true
+}
+
+watch([analysisDialogVisible, analysisTab], async ([visible, tab]) => {
+  if (!visible) return
+  await nextTick()
+  if (tab === 'replacement') initReplacementAnalysisChart()
+  if (tab === 'interval') initIntervalAnalysisChart()
+})
+
 const getIntegrityCount = (key) => Number(integrityChecks.value[key]) || 0
 const formatHours = (value) => Number(value || 0).toFixed(2)
 const toPercentage = (ratio) => Math.min(100, Math.max(0, Number((Number(ratio || 0) * 100).toFixed(1))))
@@ -282,14 +422,19 @@ const getWarningTagType = getWarningStatusType
 const getWarningColor = (level) => ({
   normal: '#67C23A',
   warning: '#E6A23C',
-  critical: '#F56C6C'
+    critical: '#F56C6C',
+    expired: '#C45656'
 }[level] || '#909399')
 
 const formatTime = (value) => value ? String(value).replace('T', ' ').slice(0, 19) : '-'
+const formatDueLevel = (value) => ({ normal: '正常', warning: '预警', due: '即将到期', overdue: '已到期' }[value] || value)
+const getDueType = (value) => ({ normal: 'success', warning: 'warning', due: 'warning', overdue: 'danger' }[value] || 'info')
 
 const handleResize = () => {
   maintenanceChart?.resize()
   retirementChart?.resize()
+  replacementAnalysisChart?.resize()
+  intervalAnalysisChart?.resize()
 }
 
 onMounted(() => {
@@ -300,7 +445,8 @@ onMounted(() => {
     fetchRetirementReasons(),
     fetchIntegrityChecks(),
     fetchRecentAuditLogs(),
-    fetchOperationalRisks()
+    fetchOperationalRisks(),
+    fetchDatabaseAnalytics()
   ])
   window.addEventListener('resize', handleResize)
 })
@@ -309,6 +455,8 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   maintenanceChart?.dispose()
   retirementChart?.dispose()
+  replacementAnalysisChart?.dispose()
+  intervalAnalysisChart?.dispose()
 })
 </script>
 
@@ -426,10 +574,20 @@ onUnmounted(() => {
 .risk-card.danger .risk-symbol { color: #d94b4b; background: #fff0f0; }
 .risk-card.warning .risk-symbol { color: #c98218; background: #fff6e8; }
 .risk-card.success .risk-symbol { color: #399a66; background: #edf9f2; }
+.analysis-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.analysis-card { padding: 16px 18px; border: 1px solid #dfeaf2; border-radius: 11px; background: linear-gradient(135deg, #f8fcff, #eef7fd); color: #34566d; text-align: left; }
+.analysis-card span, .analysis-card strong, .analysis-card small { display: block; }
+.analysis-card strong { margin: 7px 0 4px; color: #146fa9; font-size: 24px; }
+.analysis-card small { color: #879aa8; }
+.analysis-chart { width: 100%; height: 300px; margin-bottom: 18px; }
+.analysis-summary { margin-bottom: 12px; padding: 12px 16px; border-radius: 8px; background: #f0f7fc; color: #54748a; }
+.analysis-summary strong { color: #146fa9; }
+.card-title > div span, .card-title > div small { display: block; }
 @media (max-width: 1280px) { .risk-overview { grid-template-columns: repeat(3, 1fr); } }
 .audit-toolbar { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; margin-bottom: 12px; }
 @media (max-width: 1200px) {
   .dashboard-grid { grid-template-columns: 1fr; }
+  .analysis-cards { grid-template-columns: 1fr; }
   .welcome-summary div { min-width: 92px; padding: 13px; }
 }
 </style>

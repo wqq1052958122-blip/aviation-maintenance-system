@@ -193,3 +193,87 @@ FROM Component c
 JOIN Aircraft a ON a.aircraft_no = 'AC-1001'
 JOIN AircraftInstallPosition p ON p.aircraft_id = a.aircraft_id AND p.position_code = 'battery bay'
 WHERE c.component_no = 'LDG-002';
+
+-- 测试19：退役飞机是终态，不能恢复服役。
+-- 预期：Retired aircraft cannot return to service.
+UPDATE Aircraft
+SET service_status = 'active'
+WHERE aircraft_no = 'AC-1009';
+
+-- 测试20：非 active 飞机不能登记已完成飞行。
+-- AC-1006 当前为 maintenance。预期：Only active aircraft can record a completed flight.
+INSERT INTO FlightLog (
+    aircraft_id, mission_no, takeoff_time, landing_time,
+    flight_hours, mission_type, recorded_by
+)
+SELECT aircraft_id, 'FL-ILLEGAL-STATUS', '2025-06-23 09:00:00', '2025-06-23 10:00:00',
+       1.00, 'status validation test', 4
+FROM Aircraft
+WHERE aircraft_no = 'AC-1006';
+
+-- 测试21：同一飞机不能存在时间重叠的飞行日志。
+-- 从现有 active 飞机日志构造重叠区间。预期：Aircraft already has an overlapping flight log.
+INSERT INTO FlightLog (
+    aircraft_id, mission_no, takeoff_time, landing_time,
+    flight_hours, mission_type, recorded_by
+)
+SELECT fl.aircraft_id,
+       'FL-ILLEGAL-OVERLAP',
+       DATE_ADD(fl.takeoff_time, INTERVAL 10 MINUTE),
+       DATE_SUB(fl.landing_time, INTERVAL 10 MINUTE),
+       1.00,
+       'overlap validation test',
+       4
+FROM FlightLog fl
+JOIN Aircraft a ON fl.aircraft_id = a.aircraft_id
+WHERE a.service_status = 'active'
+  AND TIMESTAMPDIFF(MINUTE, fl.takeoff_time, fl.landing_time) > 20
+LIMIT 1;
+
+-- 测试22：飞行日志属于不可修改的核心历史记录。
+-- 预期：Flight log cannot be modified.
+UPDATE FlightLog
+SET mission_type = 'illegal history rewrite'
+WHERE flight_id = (SELECT flight_id FROM (SELECT MIN(flight_id) AS flight_id FROM FlightLog) t);
+
+-- 测试23：已完成飞行的降落时间不能晚于当前时间。
+-- 预期：Completed flight landing_time cannot be in the future.
+INSERT INTO FlightLog (
+    aircraft_id, mission_no, takeoff_time, landing_time,
+    flight_hours, mission_type, recorded_by
+)
+SELECT aircraft_id, 'FL-ILLEGAL-FUTURE',
+       DATE_ADD(NOW(), INTERVAL 1 HOUR), DATE_ADD(NOW(), INTERVAL 2 HOUR),
+       1.00, 'future completed flight test', 4
+FROM Aircraft
+WHERE aircraft_no = 'AC-1001';
+
+-- 测试24：普通维修类型仍不能直接用于安装中的部件。
+-- 预期：Installed component must be uninstalled before maintenance.
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time,
+    result, description, technician_id
+)
+SELECT component_id, 'repair', '2025-06-24 09:00:00', NULL,
+       'pending', 'illegal workshop repair while installed', 2
+FROM Component
+WHERE component_no = 'NAV-006';
+
+-- 测试25：维修计划不能关联其他部件的维修工单。
+-- 预期：Maintenance plan and related maintenance record must belong to the same component.
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason,
+    status, created_by, related_maintenance_id
+)
+SELECT
+    c.component_id,
+    'relationship validation test',
+    '2025-06-25 09:00:00',
+    'verify plan and work order component consistency',
+    'pending',
+    2,
+    mr.maintenance_id
+FROM Component c
+CROSS JOIN MaintenanceRecord mr
+WHERE c.component_id <> mr.component_id
+LIMIT 1;

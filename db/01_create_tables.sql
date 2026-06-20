@@ -101,6 +101,15 @@ CREATE TABLE InstallationRecord (
     uninstall_reason VARCHAR(255) COMMENT '拆卸原因',
     operator_id INT COMMENT '安装操作人员ID',
     uninstall_operator_id INT NULL COMMENT '拆卸操作人员ID',
+    active_component_id INT GENERATED ALWAYS AS (
+        CASE WHEN uninstall_time IS NULL THEN component_id ELSE NULL END
+    ) STORED COMMENT '仅当前安装保留部件ID，用于条件唯一索引',
+    active_aircraft_id INT GENERATED ALWAYS AS (
+        CASE WHEN uninstall_time IS NULL THEN aircraft_id ELSE NULL END
+    ) STORED COMMENT '仅当前安装保留飞机ID，用于条件唯一索引',
+    active_position_id INT GENERATED ALWAYS AS (
+        CASE WHEN uninstall_time IS NULL THEN position_id ELSE NULL END
+    ) STORED COMMENT '仅当前安装保留位置ID，用于条件唯一索引',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT fk_install_component FOREIGN KEY (component_id) REFERENCES Component(component_id),

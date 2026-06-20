@@ -12,12 +12,12 @@
         <el-form-item label="飞机编号"><el-input v-model="filters.aircraftNo" clearable placeholder="输入飞机编号" style="width: 170px" /></el-form-item>
         <el-form-item label="机型"><el-input v-model="filters.model" clearable placeholder="输入机型" style="width: 160px" /></el-form-item>
         <el-form-item label="状态"><el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px"><el-option label="服役中" value="active" /><el-option label="维修中" value="maintenance" /><el-option label="已退役" value="retired" /></el-select></el-form-item>
-        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchList">刷新</el-button></div></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary" @click="applyFilters">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="fetchList">刷新</el-button></div></el-form-item>
       </el-form>
     </div>
 
     <el-row :gutter="20" v-loading="loading" element-loading-text="正在加载数据...">
-      <el-col :span="8" v-for="ac in filteredAircrafts" :key="ac.aircraft_no" style="margin-bottom: 20px;">
+      <el-col :span="8" v-for="ac in pagedAircrafts" :key="ac.aircraft_no" style="margin-bottom: 20px;">
         <el-card shadow="hover" :class="{'is-retired': ac.service_status === 'retired'}">
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -62,6 +62,7 @@
       </el-col>
     </el-row>
     <el-empty v-if="!loading && !filteredAircrafts.length" description="暂无数据" />
+    <ListPagination v-model:page="currentPage" v-model:page-size="pageSize" :total="filteredAircrafts.length" :page-sizes="[6, 12, 24]" />
 
     <el-drawer
       v-model="detailVisible"
@@ -155,14 +156,14 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitCreate">提交</el-button>
+        <el-button type="primary" :loading="createSubmitting" @click="submitCreate">提交</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { getAircrafts, createAircraft, updateAircraftStatus } from '../api/aircrafts'
 import { getActiveInstallations } from '../api/installations'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -174,11 +175,14 @@ import {
   getAircraftStatusType,
   getComponentStatusType
 } from '../utils/businessFormatters'
+import { formatLocalDate } from '../utils/dateTime'
 // 引入 Element Plus 的图标
 import { Plus, Position } from '@element-plus/icons-vue'
+import ListPagination from '../components/ListPagination.vue'
 
 const aircraftList = ref([])
 const loading = ref(false)
+const createSubmitting = ref(false)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailLoadFailed = ref(false)
@@ -188,16 +192,33 @@ const createVisible = ref(false)
 const createForm = ref({
   aircraft_no: '',
   aircraft_model: '',
-  start_date: new Date().toISOString().split('T')[0]
+  start_date: formatLocalDate()
 })
 const filters = reactive({ aircraftNo: '', model: '', status: '' })
+const appliedFilters = reactive({ ...filters })
+const currentPage = ref(1)
+const pageSize = ref(6)
 const includesText = (value, keyword) => String(value || '').toLowerCase().includes(String(keyword || '').trim().toLowerCase())
 const filteredAircrafts = computed(() => aircraftList.value.filter(item =>
-  includesText(item.aircraft_no, filters.aircraftNo)
-  && includesText(item.aircraft_model, filters.model)
-  && (!filters.status || item.service_status === filters.status)
+  includesText(item.aircraft_no, appliedFilters.aircraftNo)
+  && includesText(item.aircraft_model, appliedFilters.model)
+  && (!appliedFilters.status || item.service_status === appliedFilters.status)
 ))
-const resetFilters = () => Object.assign(filters, { aircraftNo: '', model: '', status: '' })
+const pagedAircrafts = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredAircrafts.value.slice(start, start + pageSize.value)
+})
+watch(() => filteredAircrafts.value.length, total => {
+  currentPage.value = Math.min(currentPage.value, Math.max(1, Math.ceil(total / pageSize.value)))
+})
+const applyFilters = () => {
+  Object.assign(appliedFilters, filters)
+  currentPage.value = 1
+}
+const resetFilters = () => {
+  Object.assign(filters, { aircraftNo: '', model: '', status: '' })
+  applyFilters()
+}
 
 // 查询机队
 const fetchList = async () => {
@@ -215,6 +236,8 @@ const submitCreate = async () => {
   if (!createForm.value.aircraft_no || !createForm.value.aircraft_model) {
     return ElMessage.warning('请完整填写飞机编号和机型！')
   }
+  if (createSubmitting.value) return
+  createSubmitting.value = true
   try {
     await createAircraft(createForm.value)
     ElMessage.success('飞机新增成功')
@@ -222,12 +245,26 @@ const submitCreate = async () => {
     // 清空表单
     createForm.value.aircraft_no = ''
     fetchList()
-  } catch {
+  } catch {} finally {
+    createSubmitting.value = false
   }
 }
 
 // 更改飞机状态
-const changeStatus = (aircraft_no, newStatus) => {
+const changeStatus = async (aircraft_no, newStatus) => {
+  if (newStatus === 'retired') {
+    try {
+      const rows = await getActiveInstallations()
+      const activeCount = (Array.isArray(rows) ? rows : []).filter(item => item.aircraft_no === aircraft_no).length
+      if (activeCount > 0) {
+        ElMessage.warning(`该飞机仍有 ${activeCount} 个当前安装部件，请先完成拆卸或更换处理`)
+        return
+      }
+    } catch {
+      ElMessage.error('无法确认当前安装状态，暂不能执行退役')
+      return
+    }
+  }
   const statusName = translateStatus(newStatus)
   ElMessageBox.confirm(`确定将 ${aircraft_no} 的状态更改为【${statusName}】吗？`, '状态流转确认', {
     confirmButtonText: '确定',

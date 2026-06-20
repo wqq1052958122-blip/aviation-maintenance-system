@@ -15,13 +15,15 @@ router = APIRouter(tags=["flights"])
 
 
 def get_aircraft_id(db: Session, aircraft_no: str) -> int:
-    value = db.execute(
-        text("SELECT aircraft_id FROM Aircraft WHERE aircraft_no = :aircraft_no"),
+    row = db.execute(
+        text("SELECT aircraft_id, service_status FROM Aircraft WHERE aircraft_no = :aircraft_no"),
         {"aircraft_no": aircraft_no},
-    ).scalar_one_or_none()
-    if value is None:
+    ).mappings().first()
+    if row is None:
         raise HTTPException(status_code=400, detail="Aircraft does not exist.")
-    return int(value)
+    if row["service_status"] != "active":
+        raise HTTPException(status_code=400, detail="Only active aircraft can record a completed flight.")
+    return int(row["aircraft_id"])
 
 
 @router.post(
@@ -29,7 +31,8 @@ def get_aircraft_id(db: Session, aircraft_no: str) -> int:
     summary="创建飞行日志",
     description=(
         "插入 FlightLog。前端不要传 flight_hours，后端根据 takeoff_time 和 landing_time "
-        "自动计算飞行小时数，保留两位小数。landing_time 必须晚于 takeoff_time。"
+        "自动计算飞行小时数，保留两位小数。仅 active 飞机可登记已完成飞行，"
+        "landing_time 必须晚于 takeoff_time，数据库会拒绝时间重叠的任务。"
     ),
     response_model=dict,
     responses=SUCCESS_RESPONSE,
@@ -61,8 +64,16 @@ def create_flight(payload: FlightCreate, db: Session = Depends(get_db)):
             ),
             params,
         )
+        aircraft_status = db.execute(
+            text("SELECT service_status FROM Aircraft WHERE aircraft_id = :aircraft_id"),
+            {"aircraft_id": params["aircraft_id"]},
+        ).scalar_one()
         db.commit()
-        return ok({"flight_id": result.lastrowid, "flight_hours": flight_hours})
+        return ok({
+            "flight_id": result.lastrowid,
+            "flight_hours": flight_hours,
+            "aircraft_status": aircraft_status,
+        })
     except SQLAlchemyError as exc:
         raise_db_error(exc, db)
 

@@ -66,7 +66,7 @@ CALL sp_complete_maintenance(
     '2025-05-28 16:00:00',
     'passed',
     'Navigation module repaired and test passed.',
-    NULL,
+    3,
     NULL
 );
 
@@ -89,7 +89,7 @@ CALL sp_complete_maintenance(
     '2025-06-04 11:00:00',
     'passed',
     'Online inspection passed while component remains installed.',
-    NULL,
+    3,
     NULL
 );
 
@@ -158,7 +158,7 @@ SELECT *
 FROM v_audit_log_detail
 ORDER BY operation_time DESC, audit_id DESC;
 
--- 测试8：新增待执行维修计划并查询待办视图
+-- 测试8：维修计划开始执行 -> 创建关联工单 -> 工单完成后计划自动完成。
 INSERT INTO MaintenancePlan (
     component_id, planned_type, planned_time, planned_reason, status, created_by
 )
@@ -178,9 +178,25 @@ SELECT *
 FROM v_pending_maintenance_plan
 WHERE plan_id = @test_plan_id;
 
-UPDATE MaintenancePlan
-SET status = 'completed'
-WHERE plan_id = @test_plan_id;
+CALL sp_start_maintenance_plan(
+    @test_plan_id,
+    '2025-07-01 09:00:00',
+    2,
+    'Start work order from maintenance plan.'
+);
+
+SET @test_plan_maintenance_id = (
+    SELECT related_maintenance_id FROM MaintenancePlan WHERE plan_id = @test_plan_id
+);
+
+CALL sp_complete_maintenance(
+    @test_plan_maintenance_id,
+    '2025-07-01 12:00:00',
+    'passed',
+    'Planned maintenance completed and passed.',
+    3,
+    NULL
+);
 
 INSERT INTO MaintenancePlan (
     component_id, planned_type, planned_time, planned_reason, status, created_by
@@ -207,6 +223,34 @@ FROM v_maintenance_plan_detail
 WHERE plan_id IN (@test_plan_id, @cancelled_trace_plan_id)
 ORDER BY plan_id;
 
+-- 测试8.1：无效技师启动计划时，过程应回滚，不创建工单和启动审计。
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status, created_by
+)
+SELECT component_id, 'repair', '2025-07-03 09:00:00',
+       'rollback verification plan', 'pending', 2
+FROM Component
+WHERE component_no = 'ENG-006';
+
+SET @rollback_plan_id = LAST_INSERT_ID();
+
+-- 预期失败：Only technician can start maintenance plan execution.
+CALL sp_start_maintenance_plan(
+    @rollback_plan_id,
+    '2025-07-03 09:00:00',
+    3,
+    'This execution must rollback.'
+);
+
+SELECT plan_id, status, related_maintenance_id
+FROM MaintenancePlan
+WHERE plan_id = @rollback_plan_id;
+
+SELECT COUNT(*) AS unexpected_start_audit_count
+FROM AuditLog
+WHERE operation_type = 'maintenance_plan_started'
+  AND target_id = @rollback_plan_id;
+
 -- 测试9：查询包含计划、安装、维修和退役事件的生命周期总时间轴
 SELECT
     component_no, event_time, event_type, event_title,
@@ -214,3 +258,164 @@ SELECT
 FROM v_component_full_timeline
 WHERE component_no IN ('ENG-001', 'ENG-002', 'ENG-004', 'ENG-005', 'NAV-005', 'NAV-007')
 ORDER BY component_no, event_time, source_table, source_id;
+
+-- 测试10：创建安装中部件的在线检查，验证不需要先拆卸。
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time,
+    result, description, technician_id
+)
+SELECT component_id, 'online inspection', '2026-06-20 09:00:00', NULL,
+       'pending', 'online inspection trigger verification', 2
+FROM Component
+WHERE component_no = 'NAV-006';
+
+SET @new_online_maintenance_id = LAST_INSERT_ID();
+
+CALL sp_complete_maintenance(
+    @new_online_maintenance_id,
+    '2026-06-20 10:00:00',
+    'passed',
+    'Online inspection passed.',
+    3,
+    NULL
+);
+
+-- 预期：NAV-006 仍为 installed，当前安装记录仍存在。
+SELECT c.component_no, c.status, COUNT(ir.installation_id) AS active_installation_count
+FROM Component c
+LEFT JOIN InstallationRecord ir
+  ON c.component_id = ir.component_id
+ AND ir.uninstall_time IS NULL
+WHERE c.component_no = 'NAV-006'
+GROUP BY c.component_no, c.status;
+
+-- 测试11：维修未通过不直接退役，而是进入 removed 并自动创建返修计划。
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time,
+    result, description, technician_id
+)
+SELECT component_id, 'repair', '2026-06-20 11:00:00', NULL,
+       'pending', 'failed maintenance workflow verification', 2
+FROM Component
+WHERE component_no = 'ENG-006';
+
+SET @failed_maintenance_id = LAST_INSERT_ID();
+
+CALL sp_complete_maintenance(
+    @failed_maintenance_id,
+    '2026-06-20 12:00:00',
+    'failed',
+    'Maintenance did not pass; rework required.',
+    3,
+    NULL
+);
+
+SELECT component_no, status, is_retired
+FROM Component
+WHERE component_no = 'ENG-006';
+
+SELECT plan_id, component_no, planned_type, status, related_maintenance_id
+FROM v_maintenance_plan_detail
+WHERE component_no = 'ENG-006'
+  AND related_maintenance_id = @failed_maintenance_id;
+
+-- 测试12：查看到寿部件、强制寿命检查计划和自动停场审计。
+SELECT component_no, design_life_hours, used_hours, remaining_life_hours,
+       life_usage_ratio, warning_level
+FROM v_component_life_warning
+WHERE warning_level = 'expired'
+ORDER BY life_usage_ratio DESC;
+
+SELECT plan_id, component_no, planned_type, planned_time, status
+FROM v_maintenance_plan_detail
+WHERE planned_type = 'life_limit_check'
+ORDER BY planned_time DESC, plan_id DESC;
+
+SELECT audit_id, operation_type, target_table, target_id, operation_time, operation_detail
+FROM AuditLog
+WHERE operation_type = 'life_limit_grounding'
+ORDER BY operation_time DESC, audit_id DESC;
+
+-- 测试13：事务内模拟一次“飞行后刚好到寿”，验证自动停场和强制计划。
+-- 整段执行后会 ROLLBACK，不保留模拟数据。
+START TRANSACTION;
+
+SET @life_test_component_id = (
+    SELECT ir.component_id
+    FROM InstallationRecord ir
+    JOIN Aircraft a ON ir.aircraft_id = a.aircraft_id
+    WHERE ir.uninstall_time IS NULL
+      AND a.service_status = 'active'
+    ORDER BY ir.installation_id
+    LIMIT 1
+);
+
+SET @life_test_aircraft_id = (
+    SELECT aircraft_id
+    FROM InstallationRecord
+    WHERE component_id = @life_test_component_id
+      AND uninstall_time IS NULL
+    LIMIT 1
+);
+
+SET @life_test_model_id = (
+    SELECT model_id FROM Component WHERE component_id = @life_test_component_id
+);
+
+SET @life_test_used_hours = (
+    SELECT COALESCE(SUM(calculated_total_flight_hours), 0)
+    FROM v_component_flight_usage
+    WHERE component_no = (
+        SELECT component_no FROM Component WHERE component_id = @life_test_component_id
+    )
+);
+
+UPDATE ComponentModel
+SET design_life_hours = FLOOR(@life_test_used_hours) + 1
+WHERE model_id = @life_test_model_id;
+
+INSERT INTO FlightLog (
+    aircraft_id, mission_no, takeoff_time, landing_time,
+    flight_hours, mission_type, recorded_by
+)
+VALUES (
+    @life_test_aircraft_id,
+    'FL-LIFE-LIMIT-TRANSACTION-TEST',
+    '2026-06-19 09:00:00',
+    '2026-06-19 10:00:00',
+    1.00,
+    'life limit workflow test',
+    4
+);
+
+-- 预期：warning_level=expired、飞机状态=maintenance，并存在 pending life_limit_check。
+SELECT component_no, design_life_hours, used_hours, life_usage_ratio, warning_level
+FROM v_component_life_warning
+WHERE component_no = (
+    SELECT component_no FROM Component WHERE component_id = @life_test_component_id
+);
+
+SELECT aircraft_no, service_status
+FROM Aircraft
+WHERE aircraft_id = @life_test_aircraft_id;
+
+SELECT component_no, planned_type, status, planned_reason
+FROM v_maintenance_plan_detail
+WHERE component_id = @life_test_component_id
+  AND planned_type = 'life_limit_check'
+  AND status = 'pending';
+
+ROLLBACK;
+
+-- 测试14：查询三类加分分析视图。
+SELECT *
+FROM v_component_maintenance_interval
+ORDER BY component_no, end_time;
+
+SELECT *
+FROM v_aircraft_component_replacement_stats
+ORDER BY replacement_count DESC, aircraft_no, install_position;
+
+SELECT *
+FROM v_component_maintenance_due
+ORDER BY maintenance_usage_ratio DESC, component_no;

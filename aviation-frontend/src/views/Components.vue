@@ -12,11 +12,11 @@
         <el-form-item label="类别"><el-input v-model="filters.category" clearable placeholder="输入类别" style="width: 140px" /></el-form-item>
         <el-form-item label="状态"><el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px"><el-option label="在库" value="in_stock" /><el-option label="可用" value="available" /><el-option label="已安装" value="installed" /><el-option label="已拆卸" value="removed" /><el-option label="维修中" value="under_maintenance" /><el-option label="已退役" value="retired" /></el-select></el-form-item>
         <el-form-item label="是否退役"><el-select v-model="filters.retired" clearable placeholder="全部" style="width: 120px"><el-option label="未退役" :value="false" /><el-option label="已退役" :value="true" /></el-select></el-form-item>
-        <el-form-item><div class="filter-actions"><el-button type="primary">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="refreshList">刷新</el-button></div></el-form-item>
+        <el-form-item><div class="filter-actions"><el-button type="primary" @click="applyFilters">搜索</el-button><el-button @click="resetFilters">重置</el-button><el-button @click="refreshList">刷新</el-button></div></el-form-item>
       </el-form>
     </div>
 
-    <el-table :data="filteredComponents" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
+    <el-table :data="pagedComponents" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="component_no" label="部件编号" width="150" />
       <el-table-column label="部件类型" width="120">
         <template #default="scope">
@@ -43,7 +43,7 @@
             查看生命周期
           </el-button>
           <el-button 
-            v-if="!scope.row.is_retired && scope.row.status !== 'installed'" 
+            v-if="!scope.row.is_retired && ['available', 'removed', 'under_maintenance'].includes(scope.row.status)"
             type="danger" 
             size="small" 
             @click="openRetireDialog(scope.row)">
@@ -51,23 +51,27 @@
           </el-button>
         </template>
       </el-table-column>
-      <template #empty><el-empty description="暂无数据" /></template>
+      <template #empty><el-empty :description="listLoadFailed ? '加载失败' : '暂无数据'" /></template>
     </el-table>
+    <ListPagination v-model:page="currentPage" v-model:page-size="pageSize" :total="filteredComponents.length" />
 
     <el-drawer v-model="drawerVisible" size="46%">
       <template #header>
         <div class="drawer-heading"><div><small>COMPONENT LIFECYCLE</small><h2>{{ currentComponentNo }}</h2></div><el-tag :type="getComponentStatusType(drawerComponentStatus)" effect="dark">{{ formatComponentStatus(drawerComponentStatus) }}</el-tag></div>
       </template>
       <div v-loading="drawerLoading" element-loading-text="正在加载数据...">
-        <section class="detail-block"><h3>基础信息</h3><el-descriptions :column="2" border>
+        <section class="detail-block"><h3>基础信息</h3>
+        <el-alert v-if="profileLoadFailed" title="部件基础信息加载失败" type="warning" :closable="false" show-icon />
+        <el-descriptions v-else :column="2" border>
           <el-descriptions-item label="部件编号">{{ profileData.component_no }}</el-descriptions-item>
           <el-descriptions-item label="所属类别">{{ formatComponentCategory(profileData.category) }}</el-descriptions-item>
           <el-descriptions-item label="生产批次">{{ profileData.batch_no }}</el-descriptions-item>
-          <el-descriptions-item label="总飞行时长">{{ profileData.stored_total_flight_hours }} 小时</el-descriptions-item>
+          <el-descriptions-item label="累计飞行时长">{{ calculatedFlightHours }} 小时</el-descriptions-item>
         </el-descriptions></section>
 
         <section class="detail-block"><h3>飞行使用统计</h3>
-        <el-table :data="flightUsageData" border style="width: 100%; margin-bottom: 20px;">
+        <el-alert v-if="flightUsageLoadFailed" title="飞行使用统计加载失败" type="warning" :closable="false" show-icon />
+        <el-table v-else :data="flightUsageData" border style="width: 100%; margin-bottom: 20px;">
           <el-table-column prop="aircraft_no" label="飞机编号" min-width="110" />
           <el-table-column prop="flight_count" label="飞行次数" min-width="90" />
           <el-table-column prop="calculated_total_flight_hours" label="总飞行小时" min-width="110" />
@@ -144,7 +148,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitCreate">提交</el-button>
+        <el-button type="primary" :loading="createSubmitting" @click="submitCreate">提交</el-button>
       </template>
     </el-dialog>
 
@@ -172,7 +176,7 @@
       </el-form>
       <template #footer>
         <el-button @click="retireVisible = false">取消</el-button>
-        <el-button type="danger" @click="submitRetire">确认退役</el-button>
+        <el-button type="danger" :loading="retireSubmitting" @click="submitRetire">确认退役</el-button>
       </template>
     </el-dialog>
 
@@ -180,7 +184,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { getComponents, createComponent, getComponentProfile, getComponentFullTimeline, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
 import { getOperators } from '../api/operators'
 import { ElMessage } from 'element-plus'
@@ -192,14 +196,22 @@ import {
   formatLifecycleEventType,
   formatLifecycleTitle
 } from '../utils/businessFormatters'
+import { formatLocalDateTime } from '../utils/dateTime'
+import ListPagination from '../components/ListPagination.vue'
 
 // 2. 定义变量
 const componentList = ref([])
 const modelList = ref([]) // 用于存放型号数据
 const operatorList = ref([])
 const loading = ref(false)
+const listLoadFailed = ref(false)
+const createSubmitting = ref(false)
+const retireSubmitting = ref(false)
 const modelLoading = ref(false)
 const filters = reactive({ componentNo: '', modelCode: '', category: '', status: '', retired: '' })
+const appliedFilters = reactive({ ...filters })
+const currentPage = ref(1)
+const pageSize = ref(10)
 
 // 3. 定义获取型号的函数
 const fetchModels = async () => {
@@ -245,13 +257,27 @@ const getComponentModel = (modelId) => {
 const includesText = (value, keyword) => String(value || '').toLowerCase().includes(String(keyword || '').trim().toLowerCase())
 const filteredComponents = computed(() => componentList.value.filter(item => {
   const model = getComponentModel(item.model_id) || {}
-  return includesText(item.component_no, filters.componentNo)
-    && includesText(model.model_code, filters.modelCode)
-    && includesText(`${model.category || ''} ${formatComponentCategory(model.category)}`, filters.category)
-    && (!filters.status || item.status === filters.status)
-    && (filters.retired === '' || Boolean(item.is_retired) === filters.retired)
+  return includesText(item.component_no, appliedFilters.componentNo)
+    && includesText(model.model_code, appliedFilters.modelCode)
+    && includesText(`${model.category || ''} ${formatComponentCategory(model.category)}`, appliedFilters.category)
+    && (!appliedFilters.status || item.status === appliedFilters.status)
+    && (appliedFilters.retired === '' || Boolean(item.is_retired) === appliedFilters.retired)
 }))
-const resetFilters = () => Object.assign(filters, { componentNo: '', modelCode: '', category: '', status: '', retired: '' })
+const pagedComponents = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredComponents.value.slice(start, start + pageSize.value)
+})
+watch(() => filteredComponents.value.length, total => {
+  currentPage.value = Math.min(currentPage.value, Math.max(1, Math.ceil(total / pageSize.value)))
+})
+const applyFilters = () => {
+  Object.assign(appliedFilters, filters)
+  currentPage.value = 1
+}
+const resetFilters = () => {
+  Object.assign(filters, { componentNo: '', modelCode: '', category: '', status: '', retired: '' })
+  applyFilters()
+}
 const refreshList = () => Promise.all([fetchList(), fetchModels()])
 
 const formatComponentModelOption = (model) => {
@@ -260,10 +286,14 @@ const formatComponentModelOption = (model) => {
 
 const fetchList = async () => {
   loading.value = true
+  listLoadFailed.value = false
   try {
     const res = await getComponents()
     componentList.value = res.data || res || []
-  } catch {} finally {
+  } catch {
+    componentList.value = []
+    listLoadFailed.value = true
+  } finally {
     loading.value = false
   }
 }
@@ -275,7 +305,12 @@ const currentComponentNo = ref('')
 const profileData = ref({})
 const fullTimelineData = ref([])
 const fullTimelineLoadFailed = ref(false)
+const profileLoadFailed = ref(false)
+const flightUsageLoadFailed = ref(false)
 const flightUsageData = ref([])
+const calculatedFlightHours = computed(() => flightUsageData.value
+  .reduce((total, item) => total + Number(item.calculated_total_flight_hours || 0), 0)
+  .toFixed(2))
 const drawerComponentStatus = computed(() => profileData.value.status
   || profileData.value.current_status
   || componentList.value.find(item => item.component_no === currentComponentNo.value)?.status)
@@ -288,6 +323,8 @@ const openProfileDrawer = async (component_no) => {
   fullTimelineData.value = []
   flightUsageData.value = []
   fullTimelineLoadFailed.value = false
+  profileLoadFailed.value = false
+  flightUsageLoadFailed.value = false
 
   try {
     const [profileResult, flightUsageResult, fullTimelineResult] = await Promise.allSettled([
@@ -298,9 +335,13 @@ const openProfileDrawer = async (component_no) => {
 
     if (profileResult.status === 'fulfilled') {
       profileData.value = profileResult.value?.data || profileResult.value || {}
+    } else {
+      profileLoadFailed.value = true
     }
     if (flightUsageResult.status === 'fulfilled') {
       flightUsageData.value = flightUsageResult.value?.data || flightUsageResult.value || []
+    } else {
+      flightUsageLoadFailed.value = true
     }
     if (fullTimelineResult.status === 'fulfilled') {
       const rawTimeline = fullTimelineResult.value?.data || fullTimelineResult.value || {}
@@ -366,6 +407,8 @@ const submitCreate = async () => {
   if (!createForm.value.component_no) return ElMessage.warning('请填写部件编号')
   if (!createForm.value.model_id) return ElMessage.warning('请选择部件型号')
   if (!createForm.value.batch_no?.trim()) return ElMessage.warning('请输入生产批次')
+  if (createSubmitting.value) return
+  createSubmitting.value = true
   try {
     await createComponent({
       ...createForm.value,
@@ -374,7 +417,9 @@ const submitCreate = async () => {
     ElMessage.success('新部件入库成功')
     createVisible.value = false
     fetchList()
-  } catch {}
+  } catch {} finally {
+    createSubmitting.value = false
+  }
 }
 
 // --- 退役逻辑 ---
@@ -385,7 +430,7 @@ const retireTarget = ref('')
 const openRetireDialog = (row) => {
   retireTarget.value = row.component_no
   retireForm.value = {
-    retirement_time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    retirement_time: formatLocalDateTime(),
     retirement_reason: '',
     approved_by: getDefaultOperatorId('approver'),
     remark: ''
@@ -396,12 +441,16 @@ const openRetireDialog = (row) => {
 const submitRetire = async () => {
   if (!retireForm.value.retirement_reason) return ElMessage.warning('退役原因必填')
   if (!retireForm.value.approved_by) return ElMessage.warning('请选择退役审批人')
+  if (retireSubmitting.value) return
+  retireSubmitting.value = true
   try {
     await retireComponent(retireTarget.value, retireForm.value)
     ElMessage.success('退役处理成功')
     retireVisible.value = false
     fetchList() // 刷新列表，状态将变为 retired
-  } catch {}
+  } catch {} finally {
+    retireSubmitting.value = false
+  }
 }
 
 // 时间格式化：把 T 替换掉，只保留年月日时分
