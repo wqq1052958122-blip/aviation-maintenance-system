@@ -27,3 +27,10 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# 本地数据库备份，不提交到 Git
+db/backups/
+
+# 内部文档草稿和待办清单
+docs/SYSTEM_SPECIFICATION.md
+docs/SYSTEM_SPECIFICATION_MISSING_ITEMS.md
