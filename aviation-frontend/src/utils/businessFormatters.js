@@ -244,7 +244,9 @@ export const formatAuditOperationType = (value) => ({
   maintenance_plan_completed: '完成维修计划',
   cancel_maintenance_plan: '取消维修计划',
   maintenance_plan_cancelled: '取消维修计划',
-  life_limit_grounding: '寿命到限停场'
+  life_limit_grounding: '寿命到限停场',
+  maintenance_cycle_grounding: '维修到期停场',
+  maintenance_cycle_release: '维修放行'
 }[normalize(value)] || value || '未知操作')
 
 export const formatLifecycleEventType = (value) => ({
@@ -313,6 +315,12 @@ export const formatAuditDetail = (detail) => {
 
   match = detail.match(/^Aircraft moved to maintenance after flight (.+?) because an installed component reached design life$/i)
   if (match) return `飞行任务 ${match[1]} 完成后发现安装部件达到寿命上限，飞机已转入维修状态`
+
+  match = detail.match(/^Aircraft moved to maintenance after flight (.+?) because an installed component reached its maintenance cycle$/i)
+  if (match) return `飞行任务 ${match[1]} 完成后发现安装部件达到维修周期，飞机已停场维修`
+
+  match = detail.match(/^Aircraft returned to active service after approved maintenance for component (.+)$/i)
+  if (match) return `部件 ${match[1]} 维修审批通过，且无其他放行问题，飞机已恢复服役`
 
   return formatBusinessText(detail)
 }

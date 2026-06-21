@@ -38,8 +38,10 @@ def model_maintenance_stats(db: Session = Depends(get_db)):
 )
 def get_dashboard_summary(db: Session = Depends(get_db)):
     try:
-        # 1. 统计飞机总数
-        aircraft_count = db.execute(text("SELECT COUNT(*) FROM Aircraft")).scalar() or 0
+        # 1. 统计当前服役中的飞机，与前端“在役飞机”口径保持一致
+        aircraft_count = db.execute(
+            text("SELECT COUNT(*) FROM Aircraft WHERE service_status = 'active'")
+        ).scalar() or 0
         
         # 2. 统计在库部件数 (状态为 available 或 in_stock)
         stock_count = db.execute(text("SELECT COUNT(*) FROM Component WHERE status IN ('in_stock', 'available')")).scalar() or 0

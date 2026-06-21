@@ -63,7 +63,7 @@ SET @nav007_maintenance_id = (
 );
 CALL sp_complete_maintenance(
     @nav007_maintenance_id,
-    '2025-05-28 16:00:00',
+    '2026-06-18 16:00:00',
     'passed',
     'Navigation module repaired and test passed.',
     3,
@@ -86,7 +86,7 @@ SET @online_maintenance_id = (
 
 CALL sp_complete_maintenance(
     @online_maintenance_id,
-    '2025-06-04 11:00:00',
+    '2026-06-18 18:00:00',
     'passed',
     'Online inspection passed while component remains installed.',
     3,

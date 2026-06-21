@@ -277,3 +277,17 @@ FROM Component c
 CROSS JOIN MaintenanceRecord mr
 WHERE c.component_id <> mr.component_id
 LIMIT 1;
+
+-- 测试26：即使误将维修逾期飞机改回 active，数据库仍应拒绝登记下一次飞行。
+-- BAT-002 已超过维修周期。请整段执行；INSERT 预期：Aircraft has overdue scheduled maintenance and cannot record another flight.
+START TRANSACTION;
+UPDATE Aircraft SET service_status = 'active' WHERE aircraft_no = 'AC-1001';
+INSERT INTO FlightLog (
+    aircraft_id, mission_no, takeoff_time, landing_time,
+    flight_hours, mission_type, recorded_by
+)
+SELECT aircraft_id, 'FL-ILLEGAL-OVERDUE', '2025-09-10 09:00:00', '2025-09-10 10:00:00',
+       1.00, 'overdue maintenance validation', 4
+FROM Aircraft
+WHERE aircraft_no = 'AC-1001';
+ROLLBACK;
