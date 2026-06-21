@@ -287,6 +287,8 @@ BEGIN
     DECLARE v_aircraft_status VARCHAR(30);
     DECLARE v_start_date DATE;
     DECLARE v_overlap_count INT DEFAULT 0;
+    DECLARE v_missing_position_count INT DEFAULT 0;
+    DECLARE v_overdue_component_count INT DEFAULT 0;
 
     SELECT COUNT(*) INTO v_aircraft_count
     FROM Aircraft
@@ -322,12 +324,148 @@ BEGIN
     IF v_overlap_count > 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft already has an overlapping flight log.';
     END IF;
+
+    SELECT COUNT(*) INTO v_missing_position_count
+    FROM AircraftInstallPosition p
+    WHERE p.aircraft_id = NEW.aircraft_id
+      AND p.is_active = TRUE
+      AND NOT EXISTS (
+          SELECT 1
+          FROM InstallationRecord ir
+          WHERE ir.aircraft_id = NEW.aircraft_id
+            AND ir.position_id = p.position_id
+            AND ir.uninstall_time IS NULL
+            AND ir.install_time <= NEW.takeoff_time
+      );
+
+    IF v_missing_position_count > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft configuration is incomplete and cannot record a flight.';
+    END IF;
+
+    SELECT COUNT(*) INTO v_overdue_component_count
+    FROM InstallationRecord current_ir
+    JOIN Component c ON current_ir.component_id = c.component_id
+    JOIN ComponentModel cm ON c.model_id = cm.model_id
+    LEFT JOIN (
+        SELECT component_id, MAX(end_time) AS last_passed_time
+        FROM MaintenanceRecord
+        WHERE result = 'passed' AND end_time IS NOT NULL
+        GROUP BY component_id
+    ) lpm ON lpm.component_id = c.component_id
+    WHERE current_ir.aircraft_id = NEW.aircraft_id
+      AND current_ir.uninstall_time IS NULL
+      AND current_ir.install_time <= NEW.takeoff_time
+      AND (
+          SELECT COALESCE(SUM(fl.flight_hours), 0)
+          FROM InstallationRecord history_ir
+          JOIN FlightLog fl
+            ON fl.aircraft_id = history_ir.aircraft_id
+           AND fl.takeoff_time >= history_ir.install_time
+           AND (history_ir.uninstall_time IS NULL OR fl.landing_time <= history_ir.uninstall_time)
+          WHERE history_ir.component_id = c.component_id
+            AND (lpm.last_passed_time IS NULL OR fl.takeoff_time >= lpm.last_passed_time)
+      ) >= cm.maintenance_cycle_hours;
+
+    IF v_overdue_component_count > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aircraft has overdue scheduled maintenance and cannot record another flight.';
+    END IF;
 END$$
 
 CREATE TRIGGER trg_after_insert_flight
 AFTER INSERT ON FlightLog
 FOR EACH ROW
 BEGIN
+    DECLARE v_cycle_grounded INT DEFAULT 0;
+
+    -- 达到维修周期 90% 时提前生成在线检查计划；同一部件只保留一条待执行计划。
+    INSERT INTO MaintenancePlan (
+        component_id, planned_type, planned_time, planned_reason,
+        status, created_by, related_maintenance_id
+    )
+    SELECT
+        c.component_id,
+        'online inspection',
+        NEW.landing_time,
+        CONCAT('Scheduled maintenance threshold reached after flight ', NEW.mission_no),
+        'pending',
+        NEW.recorded_by,
+        NULL
+    FROM InstallationRecord current_ir
+    JOIN Component c ON current_ir.component_id = c.component_id
+    JOIN ComponentModel cm ON c.model_id = cm.model_id
+    LEFT JOIN (
+        SELECT component_id, MAX(end_time) AS last_passed_time
+        FROM MaintenanceRecord
+        WHERE result = 'passed' AND end_time IS NOT NULL
+        GROUP BY component_id
+    ) lpm ON lpm.component_id = c.component_id
+    WHERE current_ir.aircraft_id = NEW.aircraft_id
+      AND current_ir.uninstall_time IS NULL
+      AND NEW.takeoff_time >= current_ir.install_time
+      AND (
+          SELECT COALESCE(SUM(fl.flight_hours), 0)
+          FROM InstallationRecord history_ir
+          JOIN FlightLog fl
+            ON fl.aircraft_id = history_ir.aircraft_id
+           AND fl.takeoff_time >= history_ir.install_time
+           AND (history_ir.uninstall_time IS NULL OR fl.landing_time <= history_ir.uninstall_time)
+          WHERE history_ir.component_id = c.component_id
+            AND (lpm.last_passed_time IS NULL OR fl.takeoff_time >= lpm.last_passed_time)
+      ) >= cm.maintenance_cycle_hours * 0.9
+      AND NOT EXISTS (
+          SELECT 1
+          FROM MaintenancePlan mp
+          WHERE mp.component_id = c.component_id
+            AND mp.planned_type = 'online inspection'
+            AND mp.status = 'pending'
+      );
+
+    -- 本次飞行后达到维修周期时立即停场，后续飞行由前置触发器拒绝。
+    UPDATE Aircraft a
+    SET a.service_status = 'maintenance'
+    WHERE a.aircraft_id = NEW.aircraft_id
+      AND a.service_status = 'active'
+      AND EXISTS (
+          SELECT 1
+          FROM InstallationRecord current_ir
+          JOIN Component c ON current_ir.component_id = c.component_id
+          JOIN ComponentModel cm ON c.model_id = cm.model_id
+          LEFT JOIN (
+              SELECT component_id, MAX(end_time) AS last_passed_time
+              FROM MaintenanceRecord
+              WHERE result = 'passed' AND end_time IS NOT NULL
+              GROUP BY component_id
+          ) lpm ON lpm.component_id = c.component_id
+          WHERE current_ir.aircraft_id = NEW.aircraft_id
+            AND current_ir.uninstall_time IS NULL
+            AND NEW.takeoff_time >= current_ir.install_time
+            AND (
+                SELECT COALESCE(SUM(fl.flight_hours), 0)
+                FROM InstallationRecord history_ir
+                JOIN FlightLog fl
+                  ON fl.aircraft_id = history_ir.aircraft_id
+                 AND fl.takeoff_time >= history_ir.install_time
+                 AND (history_ir.uninstall_time IS NULL OR fl.landing_time <= history_ir.uninstall_time)
+                WHERE history_ir.component_id = c.component_id
+                  AND (lpm.last_passed_time IS NULL OR fl.takeoff_time >= lpm.last_passed_time)
+            ) >= cm.maintenance_cycle_hours
+      );
+
+    SET v_cycle_grounded = ROW_COUNT();
+    IF v_cycle_grounded > 0 THEN
+        INSERT INTO AuditLog (
+            operator_id, operation_type, target_table, target_id,
+            operation_time, operation_detail
+        ) VALUES (
+            NEW.recorded_by,
+            'maintenance_cycle_grounding',
+            'Aircraft',
+            NEW.aircraft_id,
+            NEW.landing_time,
+            CONCAT('Aircraft moved to maintenance after flight ', NEW.mission_no, ' because an installed component reached its maintenance cycle')
+        );
+    END IF;
+
     INSERT INTO MaintenancePlan (
         component_id,
         planned_type,
@@ -564,6 +702,14 @@ BEGIN
         SET status = 'under_maintenance'
         WHERE component_id = NEW.component_id
           AND status NOT IN ('retired', 'installed');
+
+        -- 安装中部件开始在线检查时，飞机进入维修状态，避免检查期间继续登记飞行。
+        UPDATE Aircraft a
+        JOIN InstallationRecord ir ON ir.aircraft_id = a.aircraft_id
+        SET a.service_status = 'maintenance'
+        WHERE ir.component_id = NEW.component_id
+          AND ir.uninstall_time IS NULL
+          AND a.service_status = 'active';
     END IF;
 END$$
 

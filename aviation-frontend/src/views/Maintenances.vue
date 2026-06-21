@@ -213,7 +213,7 @@
           <el-input v-model="planForm.planned_reason" type="textarea" placeholder="填写计划原因" />
         </el-form-item>
         <div class="form-section-title">责任信息</div>
-        <el-form-item label="创建人">
+        <el-form-item label="创建人" required>
           <el-select v-model="planForm.created_by" clearable placeholder="请选择创建人" style="width: 100%">
             <el-option
               v-for="op in operatorList"
@@ -414,6 +414,7 @@ const resetPlanFilters = () => {
 }
 
 const translateRole = (role) => ({
+  installer: '安装人员',
   technician: '维修技师',
   approver: '审批主管',
   admin: '系统管理员'
@@ -498,7 +499,7 @@ const openPlanDialog = () => {
 }
 
 const submitPlan = async () => {
-  if (!planForm.value.component_no || !planForm.value.planned_type || !planForm.value.planned_time) {
+  if (!planForm.value.component_no || !planForm.value.planned_type || !planForm.value.planned_time || !planForm.value.created_by) {
     return ElMessage.warning('请填写完整的维修计划信息')
   }
   if (planSubmitting.value) return
