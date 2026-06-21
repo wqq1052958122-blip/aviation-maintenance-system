@@ -58,7 +58,7 @@ CREATE TABLE Component (
     batch_no VARCHAR(50) COMMENT '批次号',
     production_date DATE COMMENT '生产日期',
     status VARCHAR(30) NOT NULL DEFAULT 'in_stock' COMMENT '当前状态',
-    total_flight_hours DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '历史兼容冗余字段；权威累计飞行小时以 FlightLog 与 InstallationRecord 推导视图为准',
+    total_flight_hours DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '历史兼容字段；可保存迁移前累计小时，系统内飞行统计仍以 FlightLog 与 InstallationRecord 推导为准',
     is_retired BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否退役',
     stock_in_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '真实业务入库时间',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '数据库记录创建时间',

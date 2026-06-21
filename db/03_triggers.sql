@@ -32,6 +32,55 @@ DROP TRIGGER IF EXISTS trg_before_delete_operator$$
 DROP TRIGGER IF EXISTS trg_before_insert_flight$$
 DROP TRIGGER IF EXISTS trg_after_insert_flight$$
 DROP TRIGGER IF EXISTS trg_before_update_flight$$
+DROP TRIGGER IF EXISTS trg_after_insert_aircraft$$
+
+-- 为在触发器启用前已由应用新增、但尚无安装位的飞机补齐标准位置。
+INSERT INTO AircraftInstallPosition (
+    aircraft_id, position_code, position_name, allowed_category, is_active
+)
+SELECT
+    a.aircraft_id,
+    p.position_code,
+    p.position_name,
+    p.allowed_category,
+    TRUE
+FROM Aircraft a
+CROSS JOIN (
+    SELECT 'left engine position' AS position_code, '左侧发动机' AS position_name, 'engine' AS allowed_category
+    UNION ALL SELECT 'landing gear bay', '主起落架舱', 'landing_gear'
+    UNION ALL SELECT 'avionics bay', '航电设备舱', 'avionics'
+    UNION ALL SELECT 'navigation bay', '导航设备舱', 'navigation'
+    UNION ALL SELECT 'hydraulic system bay', '液压系统舱', 'hydraulic'
+    UNION ALL SELECT 'fuel control bay', '燃油控制舱', 'fuel'
+    UNION ALL SELECT 'air conditioning bay', '空调系统舱', 'air_conditioning'
+    UNION ALL SELECT 'brake assembly', '刹车组件位', 'brake'
+    UNION ALL SELECT 'battery bay', '机载电源舱', 'battery'
+) p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM AircraftInstallPosition existing_position
+    WHERE existing_position.aircraft_id = a.aircraft_id
+      AND existing_position.position_code = p.position_code
+)$$
+
+-- 应用新增飞机后自动建立标准安装位，确保后续安装接口可立即使用。
+CREATE TRIGGER trg_after_insert_aircraft
+AFTER INSERT ON Aircraft
+FOR EACH ROW
+BEGIN
+    INSERT INTO AircraftInstallPosition (
+        aircraft_id, position_code, position_name, allowed_category, is_active
+    ) VALUES
+        (NEW.aircraft_id, 'left engine position', '左侧发动机', 'engine', TRUE),
+        (NEW.aircraft_id, 'landing gear bay', '主起落架舱', 'landing_gear', TRUE),
+        (NEW.aircraft_id, 'avionics bay', '航电设备舱', 'avionics', TRUE),
+        (NEW.aircraft_id, 'navigation bay', '导航设备舱', 'navigation', TRUE),
+        (NEW.aircraft_id, 'hydraulic system bay', '液压系统舱', 'hydraulic', TRUE),
+        (NEW.aircraft_id, 'fuel control bay', '燃油控制舱', 'fuel', TRUE),
+        (NEW.aircraft_id, 'air conditioning bay', '空调系统舱', 'air_conditioning', TRUE),
+        (NEW.aircraft_id, 'brake assembly', '刹车组件位', 'brake', TRUE),
+        (NEW.aircraft_id, 'battery bay', '机载电源舱', 'battery', TRUE);
+END$$
 
 CREATE TRIGGER trg_before_update_component_status
 BEFORE UPDATE ON Component
