@@ -31,7 +31,11 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="install_time" label="安装时间" width="180" />
+      <el-table-column prop="install_time" label="安装时间" width="180">
+  <template #default="scope">
+    {{ scope.row.install_time ? scope.row.install_time.replace('T', ' ') : '' }}
+  </template>
+</el-table-column>
       <el-table-column label="操作" width="220" fixed="right">
         <template #default="scope">
           <el-button type="warning" size="small" @click="openUninstallDialog(scope.row)">拆卸</el-button>
