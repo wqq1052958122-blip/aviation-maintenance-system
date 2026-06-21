@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -44,7 +46,13 @@ def list_components(db: Session = Depends(get_db)):
                 c.production_date,
                 c.stock_in_time,
                 c.status,
-                COALESCE(fu.calculated_total_flight_hours, 0) AS total_flight_hours,
+                CASE
+                    WHEN c.is_retired = TRUE THEN GREATEST(
+                        c.total_flight_hours,
+                        COALESCE(fu.calculated_total_flight_hours, 0)
+                    )
+                    ELSE COALESCE(fu.calculated_total_flight_hours, 0)
+                END AS total_flight_hours,
                 c.is_retired
             FROM Component c
             LEFT JOIN (
@@ -176,7 +184,20 @@ def get_component_full_timeline(component_no: str, db: Session = Depends(get_db)
     responses=SUCCESS_RESPONSE,
 )
 def get_component_flight_usage(component_no: str, db: Session = Depends(get_db)):
-    rows = db.execute(
+    component = db.execute(
+        text(
+            """
+            SELECT status, total_flight_hours
+            FROM Component
+            WHERE component_no = :component_no
+            """
+        ),
+        {"component_no": component_no},
+    ).mappings().first()
+    if component is None:
+        raise HTTPException(status_code=404, detail="Component does not exist.")
+
+    rows = [dict(row) for row in db.execute(
         text(
             """
             SELECT *
@@ -186,8 +207,31 @@ def get_component_flight_usage(component_no: str, db: Session = Depends(get_db))
             """
         ),
         {"component_no": component_no},
-    ).mappings().all()
-    return ok([dict(row) for row in rows])
+    ).mappings().all()]
+
+    if component["status"] == "retired":
+        tracked_hours = sum(
+            (Decimal(str(row["calculated_total_flight_hours"] or 0)) for row in rows),
+            Decimal("0"),
+        )
+        archived_hours = Decimal(str(component["total_flight_hours"] or 0))
+        rows = [row for row in rows if int(row["flight_count"] or 0) > 0]
+        unallocated_hours = max(archived_hours - tracked_hours, Decimal("0"))
+        if unallocated_hours > 0:
+            rows.append(
+                {
+                    "component_no": component_no,
+                    "model_code": None,
+                    "category": None,
+                    "aircraft_no": "历史迁移（未细分飞机）",
+                    "flight_count": None,
+                    "calculated_total_flight_hours": unallocated_hours,
+                    "first_flight_time": None,
+                    "last_flight_time": None,
+                }
+            )
+
+    return ok(rows)
 
 
 @router.post(

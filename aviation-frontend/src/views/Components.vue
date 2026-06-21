@@ -40,10 +40,13 @@
         </template>
       </el-table-column>
       <el-table-column prop="batch_no" label="生产批次" />
-      <el-table-column prop="total_flight_hours" label="总飞行小时" width="120" />
+      <el-table-column label="总飞行小时" width="120">
+        <template #default="scope">{{ formatHours(scope.row.total_flight_hours) }}</template>
+      </el-table-column>
       <el-table-column label="寿命情况" width="180">
         <template #default="scope">
-          <div class="life-warning-cell">
+          <span v-if="scope.row.is_retired || scope.row.status === 'retired'">-</span>
+          <div v-else class="life-warning-cell">
             <el-tag :type="getLifeWarningTagType(scope.row)" size="small">
               {{ getLifeWarningLabel(scope.row) }}
             </el-tag>
@@ -94,8 +97,12 @@
         <el-alert v-if="flightUsageLoadFailed" title="飞行使用统计加载失败" type="warning" :closable="false" show-icon />
         <el-table v-else :data="flightUsageData" border style="width: 100%; margin-bottom: 20px;">
           <el-table-column prop="aircraft_no" label="飞机编号" min-width="110" />
-          <el-table-column prop="flight_count" label="飞行次数" min-width="90" />
-          <el-table-column prop="calculated_total_flight_hours" label="总飞行小时" min-width="110" />
+          <el-table-column label="飞行次数" min-width="90">
+            <template #default="scope">{{ scope.row.flight_count ?? '-' }}</template>
+          </el-table-column>
+          <el-table-column label="总飞行小时" min-width="110">
+            <template #default="scope">{{ formatHours(scope.row.calculated_total_flight_hours) }}</template>
+          </el-table-column>
           <el-table-column label="首次飞行时间" min-width="150">
             <template #default="scope">{{ formatTime(scope.row.first_flight_time) || '-' }}</template>
           </el-table-column>
@@ -423,12 +430,18 @@ const fullTimelineLoadFailed = ref(false)
 const profileLoadFailed = ref(false)
 const flightUsageLoadFailed = ref(false)
 const flightUsageData = ref([])
-const calculatedFlightHours = computed(() => flightUsageData.value
-  .reduce((total, item) => total + Number(item.calculated_total_flight_hours || 0), 0)
-  .toFixed(2))
 const drawerComponentStatus = computed(() => profileData.value.status
   || profileData.value.current_status
   || componentList.value.find(item => item.component_no === currentComponentNo.value)?.status)
+const calculatedFlightHours = computed(() => {
+  const trackedHours = flightUsageData.value
+    .reduce((total, item) => total + Number(item.calculated_total_flight_hours || 0), 0)
+  const archivedHours = Number(profileData.value.stored_total_flight_hours || 0)
+  const totalHours = drawerComponentStatus.value === 'retired'
+    ? Math.max(trackedHours, archivedHours)
+    : trackedHours
+  return totalHours.toFixed(2)
+})
 
 const openProfileDrawer = async (component_no) => {
   currentComponentNo.value = component_no

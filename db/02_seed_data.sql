@@ -44,11 +44,11 @@ INSERT INTO ComponentModel (model_code, category, design_life_hours, maintenance
 ('ENG-A320-T', 'engine', 120, 45, 'A320'),
 ('ENG-B737-T', 'engine', 100, 50, 'B737'),
 ('ENG-A330-T', 'engine', 120, 60, 'A330'),
-('LDG-A320-T', 'landing_gear', 90, 65, 'A320'),
+('LDG-A320-T', 'landing_gear', 75, 65, 'A320'),
 ('LDG-B737-T', 'landing_gear', 90, 55, 'B737'),
 ('LDG-A330-T', 'landing_gear', 100, 65, 'A330'),
 ('NAV-UNIV-T', 'navigation', 300, 30, NULL),
-('AVI-A320-T', 'avionics', 100, 50, 'A320'),
+('AVI-A320-T', 'avionics', 62, 50, 'A320'),
 ('AVI-B737-T', 'avionics', 80, 45, 'B737'),
 ('AVI-A330-T', 'avionics', 90, 55, 'A330'),
 ('HYD-UNIV-T', 'hydraulic', 300, 50, NULL),
@@ -57,7 +57,7 @@ INSERT INTO ComponentModel (model_code, category, design_life_hours, maintenance
 ('BRK-A320-T', 'brake', 260, 45, 'A320'),
 ('BRK-B737-T', 'brake', 60, 40, 'B737'),
 ('BRK-A330-T', 'brake', 70, 45, 'A330'),
-('BAT-UNIV-T', 'battery', 100, 50, NULL);
+('BAT-UNIV-T', 'battery', 55, 50, NULL);
 
 -- 为每架飞机建立统一演示安装位；类别与位置一一对应。
 INSERT INTO AircraftInstallPosition (aircraft_id, position_code, position_name, allowed_category)
@@ -77,13 +77,13 @@ CROSS JOIN (
 
 -- 93 个部件实例：55 已安装、12 已退役、5 已拆卸、5 维修中、11 可用、5 在库。
 INSERT INTO Component (component_no, model_id, batch_no, production_date, stock_in_time, status, total_flight_hours, is_retired) VALUES
-('ENG-001', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-01', '2020-01-10', '2020-02-01 09:00:00', 'retired', 0, 1),
+('ENG-001', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-01', '2020-01-10', '2020-02-01 09:00:00', 'retired', 126, 1),
 ('ENG-002', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-02', '2021-04-12', '2021-05-01 09:00:00', 'installed', 0, 0),
 ('ENG-003', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-02', '2021-06-16', '2021-07-01 09:00:00', 'installed', 0, 0),
 ('ENG-004', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-03', '2022-08-03', '2022-08-20 09:00:00', 'installed', 0, 0),
 ('ENG-005', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-04', '2023-05-02', '2023-05-20 09:00:00', 'available', 0, 0),
 ('ENG-006', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-05', '2024-04-08', '2024-04-25 09:00:00', 'available', 0, 0),
-('ENB-001', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-B737-T'), 'E-B-01', '2019-03-11', '2019-04-01 09:00:00', 'retired', 0, 1),
+('ENB-001', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-B737-T'), 'E-B-01', '2019-03-11', '2019-04-01 09:00:00', 'retired', 78, 1),
 ('ENB-002', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-B737-T'), 'E-B-02', '2020-02-15', '2020-03-01 09:00:00', 'installed', 0, 0),
 ('ENB-003', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-B737-T'), 'E-B-03', '2021-09-20', '2021-10-05 09:00:00', 'installed', 0, 0),
 ('ENB-004', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-B737-T'), 'E-B-04', '2023-01-18', '2023-02-02 09:00:00', 'available', 0, 0),
@@ -91,7 +91,7 @@ INSERT INTO Component (component_no, model_id, batch_no, production_date, stock_
 ('EN3-002', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A330-T'), 'E-3-02', '2020-04-18', '2020-05-05 09:00:00', 'installed', 0, 0),
 ('EN3-003', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A330-T'), 'E-3-03', '2021-11-21', '2021-12-05 09:00:00', 'installed', 0, 0),
 ('EN3-004', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A330-T'), 'E-3-04', '2023-03-01', '2023-03-18 09:00:00', 'under_maintenance', 0, 0),
-('NAV-001', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-01', '2019-01-08', '2019-02-01 09:00:00', 'retired', 0, 1),
+('NAV-001', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-01', '2019-01-08', '2019-02-01 09:00:00', 'retired', 315, 1),
 ('NAV-002', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-02', '2020-05-12', '2020-06-01 09:00:00', 'installed', 0, 0),
 ('NAV-003', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-03', '2020-08-13', '2020-09-01 09:00:00', 'installed', 0, 0),
 ('NAV-004', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-04', '2021-02-14', '2021-03-01 09:00:00', 'installed', 0, 0),
@@ -99,23 +99,23 @@ INSERT INTO Component (component_no, model_id, batch_no, production_date, stock_
 ('NAV-006', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-06', '2021-08-16', '2021-09-01 09:00:00', 'installed', 0, 0),
 ('NAV-007', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-07', '2022-02-17', '2022-03-01 09:00:00', 'under_maintenance', 0, 0),
 ('NAV-008', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'N-08', '2023-02-18', '2023-03-01 09:00:00', 'available', 0, 0),
-('HYD-001', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'H-01', '2019-04-03', '2019-05-01 09:00:00', 'retired', 0, 1),
+('HYD-001', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'H-01', '2019-04-03', '2019-05-01 09:00:00', 'retired', 184, 1),
 ('HYD-002', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'H-02', '2020-03-04', '2020-04-01 09:00:00', 'installed', 0, 0),
 ('HYD-003', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'H-03', '2020-07-05', '2020-08-01 09:00:00', 'installed', 0, 0),
 ('HYD-004', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'H-04', '2021-01-06', '2021-02-01 09:00:00', 'installed', 0, 0),
 ('HYD-005', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'H-05', '2021-06-07', '2021-07-01 09:00:00', 'removed', 0, 0),
 ('HYD-006', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'H-06', '2022-01-08', '2022-02-01 09:00:00', 'under_maintenance', 0, 0),
-('AVI-001', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A320-T'), 'AV-A-01', '2019-05-01', '2019-06-01 09:00:00', 'retired', 0, 1),
+('AVI-001', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A320-T'), 'AV-A-01', '2019-05-01', '2019-06-01 09:00:00', 'retired', 51, 1),
 ('AVI-002', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A320-T'), 'AV-A-02', '2020-05-01', '2020-06-01 09:00:00', 'installed', 0, 0),
 ('AVI-003', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A320-T'), 'AV-A-03', '2022-05-01', '2022-06-01 09:00:00', 'available', 0, 0),
 ('AVI-004', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A320-T'), 'AV-A-04', '2024-05-01', '2024-06-01 09:00:00', 'in_stock', 0, 0),
 ('AVB-001', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-B737-T'), 'AV-B-01', '2019-07-01', '2019-08-01 09:00:00', 'removed', 0, 0),
 ('AVB-002', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-B737-T'), 'AV-B-02', '2020-07-01', '2020-08-01 09:00:00', 'installed', 0, 0),
 ('AVB-003', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-B737-T'), 'AV-B-03', '2022-07-01', '2022-08-01 09:00:00', 'under_maintenance', 0, 0),
-('AV3-001', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A330-T'), 'AV-3-01', '2018-07-01', '2018-08-01 09:00:00', 'retired', 0, 1),
+('AV3-001', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A330-T'), 'AV-3-01', '2018-07-01', '2018-08-01 09:00:00', 'retired', 76, 1),
 ('AV3-002', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A330-T'), 'AV-3-02', '2020-07-01', '2020-08-01 09:00:00', 'installed', 0, 0),
 ('AV3-003', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A330-T'), 'AV-3-03', '2022-07-01', '2022-08-01 09:00:00', 'available', 0, 0),
-('LDG-001', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A320-T'), 'L-A-01', '2018-01-01', '2018-02-01 09:00:00', 'retired', 0, 1),
+('LDG-001', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A320-T'), 'L-A-01', '2018-01-01', '2018-02-01 09:00:00', 'retired', 63, 1),
 ('LDG-002', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A320-T'), 'L-A-02', '2021-01-01', '2021-02-01 09:00:00', 'available', 0, 0),
 ('LDG-003', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A320-T'), 'L-A-03', '2024-01-01', '2024-02-01 09:00:00', 'in_stock', 0, 0),
 ('LDB-001', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-B737-T'), 'L-B-01', '2019-01-01', '2019-02-01 09:00:00', 'removed', 0, 0),
@@ -124,23 +124,23 @@ INSERT INTO Component (component_no, model_id, batch_no, production_date, stock_
 ('LD3-001', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A330-T'), 'L-3-01', '2018-04-01', '2018-05-01 09:00:00', 'removed', 0, 0),
 ('LD3-002', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A330-T'), 'L-3-02', '2020-04-01', '2020-05-01 09:00:00', 'installed', 0, 0),
 ('LD3-003', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A330-T'), 'L-3-03', '2022-04-01', '2022-05-01 09:00:00', 'under_maintenance', 0, 0),
-('FUEL-001', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'F-01', '2019-01-20', '2019-02-10 09:00:00', 'retired', 0, 1),
+('FUEL-001', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'F-01', '2019-01-20', '2019-02-10 09:00:00', 'retired', 214, 1),
 ('FUEL-002', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'F-02', '2020-01-20', '2020-02-10 09:00:00', 'installed', 0, 0),
 ('FUEL-003', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'F-03', '2021-01-20', '2021-02-10 09:00:00', 'installed', 0, 0),
 ('FUEL-004', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'F-04', '2022-01-20', '2022-02-10 09:00:00', 'installed', 0, 0),
 ('FUEL-005', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'F-05', '2023-01-20', '2023-02-10 09:00:00', 'available', 0, 0),
-('ECS-001', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'C-01', '2019-02-20', '2019-03-10 09:00:00', 'retired', 0, 1),
+('ECS-001', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'C-01', '2019-02-20', '2019-03-10 09:00:00', 'retired', 158, 1),
 ('ECS-002', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'C-02', '2020-02-20', '2020-03-10 09:00:00', 'installed', 0, 0),
 ('ECS-003', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'C-03', '2021-02-20', '2021-03-10 09:00:00', 'installed', 0, 0),
 ('ECS-004', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'C-04', '2022-02-20', '2022-03-10 09:00:00', 'installed', 0, 0),
 ('ECS-005', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'C-05', '2024-02-20', '2024-03-10 09:00:00', 'in_stock', 0, 0),
-('BRK-001', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-A320-T'), 'R-A-01', '2019-03-20', '2019-04-10 09:00:00', 'retired', 0, 1),
+('BRK-001', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-A320-T'), 'R-A-01', '2019-03-20', '2019-04-10 09:00:00', 'retired', 196, 1),
 ('BRK-002', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-A320-T'), 'R-A-02', '2020-03-20', '2020-04-10 09:00:00', 'installed', 0, 0),
 ('BRK-003', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-A320-T'), 'R-A-03', '2023-03-20', '2023-04-10 09:00:00', 'available', 0, 0),
-('BRB-001', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-B737-T'), 'R-B-01', '2019-06-20', '2019-07-10 09:00:00', 'retired', 0, 1),
+('BRB-001', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-B737-T'), 'R-B-01', '2019-06-20', '2019-07-10 09:00:00', 'retired', 64, 1),
 ('BRB-002', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-B737-T'), 'R-B-02', '2020-06-20', '2020-07-10 09:00:00', 'installed', 0, 0),
 ('BRB-003', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-B737-T'), 'R-B-03', '2023-06-20', '2023-07-10 09:00:00', 'available', 0, 0),
-('BAT-001', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-01', '2019-08-20', '2019-09-10 09:00:00', 'retired', 0, 1),
+('BAT-001', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-01', '2019-08-20', '2019-09-10 09:00:00', 'retired', 48, 1),
 ('BAT-002', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-02', '2021-08-20', '2021-09-10 09:00:00', 'installed', 0, 0),
 ('BAT-003', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-03', '2024-08-20', '2024-09-10 09:00:00', 'in_stock', 0, 0),
 -- 在役机队完整配置件：用于补齐各飞机当前有效安装位，保留原有库存与维修演示数据。
@@ -196,8 +196,9 @@ INSERT INTO ComponentStatusTransitionRule (from_status, to_status, description) 
 ('under_maintenance', 'removed', 'Maintenance failed but component is not retired'),
 ('under_maintenance', 'retired', 'Scrap component after maintenance');
 
--- 22 条历史安装记录，包含典型更换链条与拆卸事件。
+-- 23 条历史安装记录，包含典型更换链条、拆卸维修、重新安装与最终退役事件。
 INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_position, install_time, uninstall_time, install_reason, uninstall_reason, operator_id, uninstall_operator_id) VALUES
+((SELECT component_id FROM Component WHERE component_no='ENG-001'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1002' AND p.position_code='left engine position'), 'left engine position', '2021-01-10 08:00:00', '2021-12-01 18:00:00', 'initial installation', 'scheduled inspection', 1, 5),
 ((SELECT component_id FROM Component WHERE component_no='ENG-001'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1001' AND p.position_code='left engine position'), 'left engine position', '2023-01-05 08:00:00', '2024-12-20 18:00:00', 'initial installation', 'life limit reached', 1, 5),
 ((SELECT component_id FROM Component WHERE component_no='NAV-001'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1001' AND p.position_code='navigation bay'), 'navigation bay', '2023-01-05 08:10:00', '2024-11-18 16:00:00', 'initial installation', 'navigation replacement', 1, 5),
 ((SELECT component_id FROM Component WHERE component_no='HYD-001'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1002' AND p.position_code='hydraulic system bay'), 'hydraulic system bay', '2023-02-01 09:00:00', '2024-09-20 15:00:00', 'initial installation', 'irreparable leakage', 5, 9),
@@ -292,8 +293,9 @@ SET ir.install_time = TIMESTAMP('2024-01-01', TIME(ir.install_time)),
 WHERE c.batch_no LIKE 'CFG-%'
   AND ir.uninstall_time IS NULL;
 
--- 39 条维修记录，覆盖多种类型和 pending/passed/failed/scrapped 结果，并形成可分析的维修间隔。
+-- 40 条维修记录，覆盖多种类型和 pending/passed/failed/scrapped 结果，并形成可分析的维修间隔。
 INSERT INTO MaintenanceRecord (component_id, maintenance_type, start_time, end_time, result, description, technician_id) VALUES
+((SELECT component_id FROM Component WHERE component_no='ENG-001'), 'scheduled inspection', '2021-12-02 08:00:00', '2021-12-05 16:00:00', 'passed', '拆卸后计划检查通过，部件获准后续重新安装。', 2),
 ((SELECT component_id FROM Component WHERE component_no='ENG-001'), 'overhaul', '2024-12-21 08:00:00', '2024-12-28 17:00:00', 'scrapped', 'Life limit and turbine damage confirmed.', 2),
 ((SELECT component_id FROM Component WHERE component_no='NAV-001'), 'replacement check', '2024-11-19 08:00:00', '2024-11-20 15:00:00', 'failed', 'Navigation signal remained unstable.', 6),
 ((SELECT component_id FROM Component WHERE component_no='HYD-001'), 'fault repair', '2024-09-21 08:00:00', '2024-09-25 16:00:00', 'scrapped', 'Irreparable hydraulic leakage found.', 8),
@@ -416,13 +418,15 @@ WHERE EXISTS (
       )
 );
 
--- BAT-002 已超过维修周期，当前飞机按规则停场；维修通过后可由存储过程安全恢复服役。
+-- AC-1001 集中承载寿命分层演示：LDG-004 为预警、AVI-002 为严重、BAT-002 已到寿且维修逾期。
+-- 因 BAT-002 已到设计寿命，飞机保持停场，必须完成部件更换后才能恢复服役。
 UPDATE Aircraft
 SET service_status = 'maintenance'
 WHERE aircraft_no = 'AC-1001';
 
--- 20 条维修计划：4 待执行、4 执行中、7 completed、5 cancelled。
+-- 21 条维修计划：4 待执行、4 执行中、8 completed、5 cancelled。
 INSERT INTO MaintenancePlan (component_id, planned_type, planned_time, planned_reason, status, created_by, created_at, completed_at, related_maintenance_id) VALUES
+((SELECT component_id FROM Component WHERE component_no='ENG-001'), 'scheduled_inspection', '2021-12-02 08:00:00', '首次拆卸后执行计划检查，为后续重新安装提供依据。', 'completed', 3, '2021-12-01 19:00:00', '2021-12-05 16:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-001') AND result='passed' LIMIT 1)),
 ((SELECT component_id FROM Component WHERE component_no='ENG-002'), 'life_limit_check', '2026-07-05 09:00:00', 'High life usage requires focused inspection.', 'pending', 3, '2026-06-15 09:00:00', NULL, NULL),
 ((SELECT component_id FROM Component WHERE component_no='NAV-002'), 'life_limit_check', '2026-07-06 09:00:00', 'Critical navigation life usage.', 'pending', 7, '2026-06-15 09:10:00', NULL, NULL),
 ((SELECT component_id FROM Component WHERE component_no='HYD-002'), 'preventive_maintenance', '2026-07-07 09:00:00', 'Preventive pressure inspection.', 'pending', 3, '2026-06-15 09:20:00', NULL, NULL),
@@ -459,8 +463,10 @@ INSERT INTO RetirementRecord (component_id, retirement_time, retirement_reason, 
 ((SELECT component_id FROM Component WHERE component_no='BRB-001'), '2024-05-18 10:00:00', 'life limit reached after replacement', 3, 'Replaced during brake system upgrade.'),
 ((SELECT component_id FROM Component WHERE component_no='BAT-001'), '2024-06-03 10:40:00', 'replacement retirement', 7, 'Battery replaced during fleet retirement.' );
 
--- 28 条人工审计日志，覆盖关键业务类型及维修计划开始执行；均使用已有操作人员。
+-- 30 条人工审计日志，覆盖关键业务类型及维修计划开始执行；均使用已有操作人员。
 INSERT INTO AuditLog (operator_id, operation_type, target_table, target_id, operation_time, operation_detail) VALUES
+(3, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-001') AND status='completed' LIMIT 1), '2021-12-01 19:00:00', 'Created maintenance plan for component ENG-001; type: scheduled_inspection'),
+(3, 'maintenance_plan_completed', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-001') AND status='completed' LIMIT 1), '2021-12-05 16:00:00', 'Completed maintenance plan for component ENG-001; type: scheduled_inspection'),
 (5, 'component_replacement', 'InstallationRecord', (SELECT installation_id FROM InstallationRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-002') AND uninstall_time IS NULL LIMIT 1), '2025-01-01 08:00:00', 'Replaced component ENG-001 with ENG-002 on aircraft AC-1001 at left engine position'),
 (5, 'component_replacement', 'InstallationRecord', (SELECT installation_id FROM InstallationRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-002') AND uninstall_time IS NULL LIMIT 1), '2025-01-01 08:10:00', 'Replaced component NAV-001 with NAV-002 on aircraft AC-1001 at navigation bay'),
 (9, 'component_replacement', 'InstallationRecord', (SELECT installation_id FROM InstallationRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENB-002') AND uninstall_time IS NULL LIMIT 1), '2025-01-03 08:00:00', 'Replaced component ENB-001 with ENB-002 on aircraft AC-1003 at left engine position'),

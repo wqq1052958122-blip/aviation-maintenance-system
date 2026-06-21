@@ -148,7 +148,11 @@
           <el-input v-model="createForm.aircraft_no" placeholder="如 AC-1008" />
         </el-form-item>
         <el-form-item label="机型型号" required>
-          <el-input v-model="createForm.aircraft_model" placeholder="如 A320, B737, C919" />
+          <el-select v-model="createForm.aircraft_model" placeholder="请选择系统已配置机型" style="width: 100%">
+            <el-option label="A320" value="A320" />
+            <el-option label="B737" value="B737" />
+            <el-option label="A330" value="A330" />
+          </el-select>
         </el-form-item>
         <el-form-item label="入列日期">
           <el-date-picker v-model="createForm.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -242,8 +246,11 @@ const submitCreate = async () => {
     await createAircraft(createForm.value)
     ElMessage.success('飞机新增成功')
     createVisible.value = false
-    // 清空表单
-    createForm.value.aircraft_no = ''
+    createForm.value = {
+      aircraft_no: '',
+      aircraft_model: '',
+      start_date: formatLocalDate()
+    }
     fetchList()
   } catch {} finally {
     createSubmitting.value = false
