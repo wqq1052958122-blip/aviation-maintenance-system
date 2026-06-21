@@ -8,6 +8,7 @@
     <div class="filter-panel">
       <el-form class="filter-form" inline>
         <el-form-item label="部件编号"><el-input v-model="filters.componentNo" clearable placeholder="输入部件编号" style="width: 160px" /></el-form-item>
+        <el-form-item label="安装飞机"><el-input v-model="filters.aircraftNo" clearable placeholder="输入飞机编号" style="width: 140px" /></el-form-item>
         <el-form-item label="型号"><el-input v-model="filters.modelCode" clearable placeholder="输入型号" style="width: 140px" /></el-form-item>
         <el-form-item label="类别"><el-input v-model="filters.category" clearable placeholder="输入类别" style="width: 140px" /></el-form-item>
         <el-form-item label="状态"><el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px"><el-option label="在库" value="in_stock" /><el-option label="可用" value="available" /><el-option label="已安装" value="installed" /><el-option label="已拆卸" value="removed" /><el-option label="维修中" value="under_maintenance" /><el-option label="已退役" value="retired" /></el-select></el-form-item>
@@ -18,6 +19,16 @@
 
     <el-table :data="pagedComponents" border style="width: 100%" v-loading="loading" element-loading-text="正在加载数据...">
       <el-table-column prop="component_no" label="部件编号" width="150" />
+      <el-table-column label="当前安装飞机" width="150">
+        <template #default="scope">
+          <div v-if="activeInstallLoadFailed" class="current-install-unavailable">数据暂不可用</div>
+          <div v-else-if="getCurrentInstall(scope.row)" class="current-install-cell">
+            <span>{{ getCurrentInstall(scope.row).aircraft_no }}</span>
+            <small>{{ getCurrentInstallPositionText(scope.row) }}</small>
+          </div>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
       <el-table-column label="部件类型" width="120">
         <template #default="scope">
           {{ formatComponentCategory(getComponentModel(scope.row.model_id)?.category) }}
@@ -30,6 +41,16 @@
       </el-table-column>
       <el-table-column prop="batch_no" label="生产批次" />
       <el-table-column prop="total_flight_hours" label="总飞行小时" width="120" />
+      <el-table-column label="寿命情况" width="180">
+        <template #default="scope">
+          <div class="life-warning-cell">
+            <el-tag :type="getLifeWarningTagType(scope.row)" size="small">
+              {{ getLifeWarningLabel(scope.row) }}
+            </el-tag>
+            <span class="life-warning-detail">{{ getLifeWarningDetail(scope.row) }}</span>
+          </div>
+        </template>
+      </el-table-column>
       
       <el-table-column label="当前状态" width="120">
         <template #default="scope">
@@ -187,6 +208,8 @@
 import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { getComponents, createComponent, getComponentProfile, getComponentFullTimeline, getComponentFlightUsage, retireComponent, getComponentModels } from '../api/components'
 import { getOperators } from '../api/operators'
+import { getActiveInstallations } from '../api/installations'
+import { getComponentLifeWarning } from '../api/stats'
 import { ElMessage } from 'element-plus'
 import {
   formatComponentCategory,
@@ -202,13 +225,17 @@ import ListPagination from '../components/ListPagination.vue'
 // 2. 定义变量
 const componentList = ref([])
 const modelList = ref([]) // 用于存放型号数据
+const lifeWarningList = ref([])
+const activeInstallList = ref([])
 const operatorList = ref([])
 const loading = ref(false)
 const listLoadFailed = ref(false)
+const lifeWarningLoadFailed = ref(false)
+const activeInstallLoadFailed = ref(false)
 const createSubmitting = ref(false)
 const retireSubmitting = ref(false)
 const modelLoading = ref(false)
-const filters = reactive({ componentNo: '', modelCode: '', category: '', status: '', retired: '' })
+const filters = reactive({ componentNo: '', aircraftNo: '', modelCode: '', category: '', status: '', retired: '' })
 const appliedFilters = reactive({ ...filters })
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -229,6 +256,8 @@ const fetchModels = async () => {
 onMounted(() => {
   fetchList()    // 原有的部件实例获取
   fetchModels()  // 新增的型号字典获取
+  fetchLifeWarnings()
+  fetchActiveInstallations()
   fetchOperators()
 })
 
@@ -253,11 +282,19 @@ const getDefaultOperatorId = (role) => {
 const getComponentModel = (modelId) => {
   return modelList.value.find(model => Number(model.model_id) === Number(modelId))
 }
+const lifeWarningMap = computed(() => new Map(
+  lifeWarningList.value.map(item => [item.component_no, item])
+))
+const activeInstallMap = computed(() => new Map(
+  activeInstallList.value.map(item => [item.component_no, item])
+))
 
 const includesText = (value, keyword) => String(value || '').toLowerCase().includes(String(keyword || '').trim().toLowerCase())
 const filteredComponents = computed(() => componentList.value.filter(item => {
   const model = getComponentModel(item.model_id) || {}
+  const currentInstall = getCurrentInstall(item)
   return includesText(item.component_no, appliedFilters.componentNo)
+    && (!appliedFilters.aircraftNo || (!activeInstallLoadFailed.value && includesText(currentInstall?.aircraft_no, appliedFilters.aircraftNo)))
     && includesText(model.model_code, appliedFilters.modelCode)
     && includesText(`${model.category || ''} ${formatComponentCategory(model.category)}`, appliedFilters.category)
     && (!appliedFilters.status || item.status === appliedFilters.status)
@@ -275,10 +312,10 @@ const applyFilters = () => {
   currentPage.value = 1
 }
 const resetFilters = () => {
-  Object.assign(filters, { componentNo: '', modelCode: '', category: '', status: '', retired: '' })
+  Object.assign(filters, { componentNo: '', aircraftNo: '', modelCode: '', category: '', status: '', retired: '' })
   applyFilters()
 }
-const refreshList = () => Promise.all([fetchList(), fetchModels()])
+const refreshList = () => Promise.all([fetchList(), fetchModels(), fetchLifeWarnings(), fetchActiveInstallations()])
 
 const formatComponentModelOption = (model) => {
   return `${formatComponentCategory(model.category)} / ${model.model_code}`
@@ -296,6 +333,84 @@ const fetchList = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const fetchLifeWarnings = async () => {
+  lifeWarningLoadFailed.value = false
+  try {
+    const res = await getComponentLifeWarning()
+    lifeWarningList.value = res.data || res || []
+  } catch {
+    lifeWarningList.value = []
+    lifeWarningLoadFailed.value = true
+  }
+}
+
+const fetchActiveInstallations = async () => {
+  activeInstallLoadFailed.value = false
+  try {
+    const res = await getActiveInstallations()
+    activeInstallList.value = res.data || res || []
+  } catch {
+    activeInstallList.value = []
+    activeInstallLoadFailed.value = true
+  }
+}
+
+const formatHours = (value) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return Number.isInteger(number) ? String(number) : number.toFixed(2)
+}
+
+const getLifeWarning = (row) => lifeWarningMap.value.get(row.component_no)
+const getCurrentInstall = (row) => activeInstallMap.value.get(row.component_no)
+
+const getCurrentInstallPositionText = (row) => {
+  const install = getCurrentInstall(row)
+  return install?.position_name || install?.install_position || ''
+}
+
+const hasValidLifeData = (warning) => {
+  const designLife = Number(warning?.design_life_hours)
+  return warning && Number.isFinite(designLife) && designLife > 0
+}
+
+const lifeWarningLabelMap = {
+  normal: '正常',
+  warning: '预警',
+  critical: '临界',
+  expired: '超限'
+}
+
+const lifeWarningTagTypeMap = {
+  normal: 'success',
+  warning: 'warning',
+  critical: 'danger',
+  expired: 'danger'
+}
+
+const getLifeWarningLabel = (row) => {
+  if (lifeWarningLoadFailed.value) return '寿命数据暂不可用'
+  const warning = getLifeWarning(row)
+  if (!hasValidLifeData(warning)) return '寿命数据缺失'
+  return lifeWarningLabelMap[warning.warning_level] || '寿命数据缺失'
+}
+
+const getLifeWarningTagType = (row) => {
+  if (lifeWarningLoadFailed.value) return 'info'
+  const warning = getLifeWarning(row)
+  if (!hasValidLifeData(warning)) return 'info'
+  return lifeWarningTagTypeMap[warning.warning_level] || 'info'
+}
+
+const getLifeWarningDetail = (row) => {
+  if (lifeWarningLoadFailed.value) return '请稍后刷新'
+  const warning = getLifeWarning(row)
+  if (!hasValidLifeData(warning) || !lifeWarningLabelMap[warning.warning_level]) {
+    return '未返回可用寿命计算结果'
+  }
+  return `${formatHours(warning.used_hours)} / ${formatHours(warning.design_life_hours)} h · 剩余 ${formatHours(warning.remaining_life_hours)} h`
 }
 
 // --- 查看生命周期逻辑 (抽屉) ---
@@ -416,7 +531,7 @@ const submitCreate = async () => {
     })
     ElMessage.success('新部件入库成功')
     createVisible.value = false
-    fetchList()
+    refreshList()
   } catch {} finally {
     createSubmitting.value = false
   }
@@ -447,7 +562,7 @@ const submitRetire = async () => {
     await retireComponent(retireTarget.value, retireForm.value)
     ElMessage.success('退役处理成功')
     retireVisible.value = false
-    fetchList() // 刷新列表，状态将变为 retired
+    refreshList() // 刷新列表，状态将变为 retired
   } catch {} finally {
     retireSubmitting.value = false
   }
@@ -489,5 +604,29 @@ const formatTime = (timeStr) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+.life-warning-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  line-height: 1.3;
+}
+.life-warning-detail {
+  color: #606266;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.current-install-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.3;
+}
+.current-install-cell small,
+.current-install-unavailable {
+  color: #909399;
+  font-size: 12px;
 }
 </style>

@@ -41,22 +41,22 @@ INSERT INTO ComponentCategory (category_code, category_name, description) VALUES
 ('battery', '机载电源', '机载电池与备用电源组件');
 
 INSERT INTO ComponentModel (model_code, category, design_life_hours, maintenance_cycle_hours, applicable_aircraft_model) VALUES
-('ENG-A320-T', 'engine', 100, 20, 'A320'),
+('ENG-A320-T', 'engine', 120, 20, 'A320'),
 ('ENG-B737-T', 'engine', 100, 20, 'B737'),
 ('ENG-A330-T', 'engine', 120, 24, 'A330'),
 ('LDG-A320-T', 'landing_gear', 90, 18, 'A320'),
 ('LDG-B737-T', 'landing_gear', 90, 18, 'B737'),
 ('LDG-A330-T', 'landing_gear', 100, 20, 'A330'),
-('NAV-UNIV-T', 'navigation', 60, 11, NULL),
-('AVI-A320-T', 'avionics', 80, 16, 'A320'),
+('NAV-UNIV-T', 'navigation', 300, 11, NULL),
+('AVI-A320-T', 'avionics', 100, 16, 'A320'),
 ('AVI-B737-T', 'avionics', 80, 16, 'B737'),
 ('AVI-A330-T', 'avionics', 90, 18, 'A330'),
-('HYD-UNIV-T', 'hydraulic', 70, 14, NULL),
-('FUEL-UNIV-T', 'fuel', 75, 15, NULL),
-('ECS-UNIV-T', 'air_conditioning', 65, 13, NULL),
-('BRK-A320-T', 'brake', 50, 10, 'A320'),
+('HYD-UNIV-T', 'hydraulic', 300, 14, NULL),
+('FUEL-UNIV-T', 'fuel', 300, 15, NULL),
+('ECS-UNIV-T', 'air_conditioning', 150, 13, NULL),
+('BRK-A320-T', 'brake', 260, 10, 'A320'),
 ('BRK-B737-T', 'brake', 50, 10, 'B737'),
-('BAT-UNIV-T', 'battery', 40, 8, NULL);
+('BAT-UNIV-T', 'battery', 100, 8, NULL);
 
 -- 为每架飞机建立统一演示安装位；类别与位置一一对应。
 INSERT INTO AircraftInstallPosition (aircraft_id, position_code, position_name, allowed_category)
