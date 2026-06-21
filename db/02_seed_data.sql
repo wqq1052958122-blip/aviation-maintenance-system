@@ -41,22 +41,23 @@ INSERT INTO ComponentCategory (category_code, category_name, description) VALUES
 ('battery', '机载电源', '机载电池与备用电源组件');
 
 INSERT INTO ComponentModel (model_code, category, design_life_hours, maintenance_cycle_hours, applicable_aircraft_model) VALUES
-('ENG-A320-T', 'engine', 100, 20, 'A320'),
-('ENG-B737-T', 'engine', 100, 20, 'B737'),
-('ENG-A330-T', 'engine', 120, 24, 'A330'),
-('LDG-A320-T', 'landing_gear', 90, 18, 'A320'),
-('LDG-B737-T', 'landing_gear', 90, 18, 'B737'),
-('LDG-A330-T', 'landing_gear', 100, 20, 'A330'),
-('NAV-UNIV-T', 'navigation', 60, 11, NULL),
-('AVI-A320-T', 'avionics', 80, 16, 'A320'),
-('AVI-B737-T', 'avionics', 80, 16, 'B737'),
-('AVI-A330-T', 'avionics', 90, 18, 'A330'),
-('HYD-UNIV-T', 'hydraulic', 70, 14, NULL),
-('FUEL-UNIV-T', 'fuel', 75, 15, NULL),
-('ECS-UNIV-T', 'air_conditioning', 65, 13, NULL),
-('BRK-A320-T', 'brake', 50, 10, 'A320'),
-('BRK-B737-T', 'brake', 50, 10, 'B737'),
-('BAT-UNIV-T', 'battery', 40, 8, NULL);
+('ENG-A320-T', 'engine', 100, 45, 'A320'),
+('ENG-B737-T', 'engine', 100, 50, 'B737'),
+('ENG-A330-T', 'engine', 120, 60, 'A330'),
+('LDG-A320-T', 'landing_gear', 90, 65, 'A320'),
+('LDG-B737-T', 'landing_gear', 90, 55, 'B737'),
+('LDG-A330-T', 'landing_gear', 100, 65, 'A330'),
+('NAV-UNIV-T', 'navigation', 60, 30, NULL),
+('AVI-A320-T', 'avionics', 80, 50, 'A320'),
+('AVI-B737-T', 'avionics', 80, 45, 'B737'),
+('AVI-A330-T', 'avionics', 90, 55, 'A330'),
+('HYD-UNIV-T', 'hydraulic', 70, 50, NULL),
+('FUEL-UNIV-T', 'fuel', 75, 55, NULL),
+('ECS-UNIV-T', 'air_conditioning', 65, 50, NULL),
+('BRK-A320-T', 'brake', 60, 45, 'A320'),
+('BRK-B737-T', 'brake', 60, 40, 'B737'),
+('BRK-A330-T', 'brake', 70, 45, 'A330'),
+('BAT-UNIV-T', 'battery', 60, 50, NULL);
 
 -- 为每架飞机建立统一演示安装位；类别与位置一一对应。
 INSERT INTO AircraftInstallPosition (aircraft_id, position_code, position_name, allowed_category)
@@ -74,7 +75,7 @@ CROSS JOIN (
     UNION ALL SELECT 'battery bay', '机载电源舱', 'battery'
 ) p;
 
--- 66 个部件实例：28 已安装、12 已退役、5 已拆卸、5 维修中、11 可用、5 在库。
+-- 93 个部件实例：55 已安装、12 已退役、5 已拆卸、5 维修中、11 可用、5 在库。
 INSERT INTO Component (component_no, model_id, batch_no, production_date, stock_in_time, status, total_flight_hours, is_retired) VALUES
 ('ENG-001', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-01', '2020-01-10', '2020-02-01 09:00:00', 'retired', 0, 1),
 ('ENG-002', (SELECT model_id FROM ComponentModel WHERE model_code='ENG-A320-T'), 'E-A-02', '2021-04-12', '2021-05-01 09:00:00', 'installed', 0, 0),
@@ -141,7 +142,41 @@ INSERT INTO Component (component_no, model_id, batch_no, production_date, stock_
 ('BRB-003', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-B737-T'), 'R-B-03', '2023-06-20', '2023-07-10 09:00:00', 'available', 0, 0),
 ('BAT-001', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-01', '2019-08-20', '2019-09-10 09:00:00', 'retired', 0, 1),
 ('BAT-002', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-02', '2021-08-20', '2021-09-10 09:00:00', 'installed', 0, 0),
-('BAT-003', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-03', '2024-08-20', '2024-09-10 09:00:00', 'in_stock', 0, 0);
+('BAT-003', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'B-03', '2024-08-20', '2024-09-10 09:00:00', 'in_stock', 0, 0),
+-- 在役机队完整配置件：用于补齐各飞机当前有效安装位，保留原有库存与维修演示数据。
+('LDG-004', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A320-T'), 'CFG-1001-LDG', '2025-06-01', '2025-07-01 09:00:00', 'installed', 0, 0),
+('LDG-005', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A320-T'), 'CFG-1002-LDG', '2025-06-02', '2025-07-02 09:00:00', 'installed', 0, 0),
+('AVI-005', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A320-T'), 'CFG-1002-AVI', '2025-06-02', '2025-07-02 09:10:00', 'installed', 0, 0),
+('HYD-007', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'CFG-1002-HYD', '2025-06-02', '2025-07-02 09:20:00', 'installed', 0, 0),
+('BRK-004', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-A320-T'), 'CFG-1002-BRK', '2025-06-02', '2025-07-02 09:30:00', 'installed', 0, 0),
+('BAT-004', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'CFG-1002-BAT', '2025-06-02', '2025-07-02 09:40:00', 'installed', 0, 0),
+('LDB-004', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-B737-T'), 'CFG-1003-LDG', '2025-06-03', '2025-07-03 09:00:00', 'installed', 0, 0),
+('FUEL-006', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'CFG-1003-FUEL', '2025-06-03', '2025-07-03 09:10:00', 'installed', 0, 0),
+('ECS-006', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'CFG-1003-ECS', '2025-06-03', '2025-07-03 09:20:00', 'installed', 0, 0),
+('BAT-005', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'CFG-1003-BAT', '2025-06-03', '2025-07-03 09:30:00', 'installed', 0, 0),
+('LDB-005', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-B737-T'), 'CFG-1004-LDG', '2025-06-04', '2025-07-04 09:00:00', 'installed', 0, 0),
+('AVB-004', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-B737-T'), 'CFG-1004-AVI', '2025-06-04', '2025-07-04 09:10:00', 'installed', 0, 0),
+('HYD-008', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'CFG-1004-HYD', '2025-06-04', '2025-07-04 09:20:00', 'installed', 0, 0),
+('BRB-004', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-B737-T'), 'CFG-1004-BRK', '2025-06-04', '2025-07-04 09:30:00', 'installed', 0, 0),
+('BAT-006', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'CFG-1004-BAT', '2025-06-04', '2025-07-04 09:40:00', 'installed', 0, 0),
+('FUEL-007', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'CFG-1005-FUEL', '2025-06-05', '2025-07-05 09:00:00', 'installed', 0, 0),
+('ECS-007', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'CFG-1005-ECS', '2025-06-05', '2025-07-05 09:10:00', 'installed', 0, 0),
+('BR3-001', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-A330-T'), 'CFG-1005-BRK', '2025-06-05', '2025-07-05 09:20:00', 'installed', 0, 0),
+('BAT-007', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'CFG-1005-BAT', '2025-06-05', '2025-07-05 09:30:00', 'installed', 0, 0),
+('LDG-006', (SELECT model_id FROM ComponentModel WHERE model_code='LDG-A320-T'), 'CFG-1007-LDG', '2025-06-07', '2025-07-07 09:00:00', 'installed', 0, 0),
+('AVI-006', (SELECT model_id FROM ComponentModel WHERE model_code='AVI-A320-T'), 'CFG-1007-AVI', '2025-06-07', '2025-07-07 09:10:00', 'installed', 0, 0),
+('NAV-009', (SELECT model_id FROM ComponentModel WHERE model_code='NAV-UNIV-T'), 'CFG-1007-NAV', '2025-06-07', '2025-07-07 09:20:00', 'installed', 0, 0),
+('HYD-009', (SELECT model_id FROM ComponentModel WHERE model_code='HYD-UNIV-T'), 'CFG-1007-HYD', '2025-06-07', '2025-07-07 09:30:00', 'installed', 0, 0),
+('FUEL-008', (SELECT model_id FROM ComponentModel WHERE model_code='FUEL-UNIV-T'), 'CFG-1007-FUEL', '2025-06-07', '2025-07-07 09:40:00', 'installed', 0, 0),
+('ECS-008', (SELECT model_id FROM ComponentModel WHERE model_code='ECS-UNIV-T'), 'CFG-1007-ECS', '2025-06-07', '2025-07-07 09:50:00', 'installed', 0, 0),
+('BRK-005', (SELECT model_id FROM ComponentModel WHERE model_code='BRK-A320-T'), 'CFG-1007-BRK', '2025-06-07', '2025-07-07 10:00:00', 'installed', 0, 0),
+('BAT-008', (SELECT model_id FROM ComponentModel WHERE model_code='BAT-UNIV-T'), 'CFG-1007-BAT', '2025-06-07', '2025-07-07 10:10:00', 'installed', 0, 0);
+
+-- 完整配置件在本项目飞行日志统计期开始前已入库，保证安装时间不早于入库时间。
+UPDATE Component
+SET production_date = '2023-01-01',
+    stock_in_time = '2023-06-01 09:00:00'
+WHERE batch_no LIKE 'CFG-%';
 
 INSERT INTO ComponentStatusTransitionRule (from_status, to_status, description) VALUES
 ('in_stock', 'available', 'Inventory inspection completed'),
@@ -189,7 +224,7 @@ INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_
 ((SELECT component_id FROM Component WHERE component_no='ENG-005'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='left engine position'), 'left engine position', '2023-06-01 08:00:00', '2024-01-15 16:00:00', 'fleet introduction installation', 'scheduled rotation', 1, 5),
 ((SELECT component_id FROM Component WHERE component_no='ENG-006'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='left engine position'), 'left engine position', '2024-05-01 08:00:00', '2024-12-20 16:00:00', 'scheduled rotation installation', 'oil trend inspection replacement', 5, 9);
 
--- 28 条当前有效安装记录；每个部件和每个飞机位置均保持唯一有效记录。
+-- 55 条当前有效安装记录；6 架在役飞机的 9 个有效位置均完整配置，另保留 1 条维修飞机安装记录。
 INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_position, install_time, uninstall_time, install_reason, operator_id) VALUES
 ((SELECT component_id FROM Component WHERE component_no='ENG-002'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1001' AND p.position_code='left engine position'), 'left engine position', '2025-01-01 08:00:00', NULL, 'replacement installation', 1),
 ((SELECT component_id FROM Component WHERE component_no='NAV-002'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1001' AND p.position_code='navigation bay'), 'navigation bay', '2025-01-01 08:10:00', NULL, 'replacement installation', 1),
@@ -220,7 +255,44 @@ INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_
 ((SELECT component_id FROM Component WHERE component_no='EN3-003'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1006'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1006' AND p.position_code='left engine position'), 'left engine position', '2025-02-12 08:00:00', NULL, 'replacement installation', 5),
 ((SELECT component_id FROM Component WHERE component_no='ENG-004'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='left engine position'), 'left engine position', '2025-01-07 08:00:00', NULL, 'normal installation', 9);
 
--- 38 条维修记录，覆盖多种类型和 pending/passed/failed/scrapped 结果，并形成可分析的维修间隔。
+-- 补齐在役飞机当前配置；统一作为 2024 年初基线配置导入，早于各在役飞机首条飞行日志。
+INSERT INTO InstallationRecord (component_id, aircraft_id, position_id, install_position, install_time, uninstall_time, install_reason, operator_id) VALUES
+((SELECT component_id FROM Component WHERE component_no='LDG-004'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1001' AND p.position_code='landing gear bay'), 'landing gear bay', '2025-09-01 09:00:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='LDG-005'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1002' AND p.position_code='landing gear bay'), 'landing gear bay', '2025-09-02 09:00:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='AVI-005'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1002' AND p.position_code='avionics bay'), 'avionics bay', '2025-09-02 09:10:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='HYD-007'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1002' AND p.position_code='hydraulic system bay'), 'hydraulic system bay', '2025-09-02 09:20:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='BRK-004'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1002' AND p.position_code='brake assembly'), 'brake assembly', '2025-09-02 09:30:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='BAT-004'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1002' AND p.position_code='battery bay'), 'battery bay', '2025-09-02 09:40:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='LDB-004'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1003'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1003' AND p.position_code='landing gear bay'), 'landing gear bay', '2025-09-03 09:00:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='FUEL-006'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1003'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1003' AND p.position_code='fuel control bay'), 'fuel control bay', '2025-09-03 09:10:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='ECS-006'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1003'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1003' AND p.position_code='air conditioning bay'), 'air conditioning bay', '2025-09-03 09:20:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='BAT-005'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1003'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1003' AND p.position_code='battery bay'), 'battery bay', '2025-09-03 09:30:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='LDB-005'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1004'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1004' AND p.position_code='landing gear bay'), 'landing gear bay', '2025-09-04 09:00:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='AVB-004'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1004'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1004' AND p.position_code='avionics bay'), 'avionics bay', '2025-09-04 09:10:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='HYD-008'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1004'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1004' AND p.position_code='hydraulic system bay'), 'hydraulic system bay', '2025-09-04 09:20:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='BRB-004'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1004'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1004' AND p.position_code='brake assembly'), 'brake assembly', '2025-09-04 09:30:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='BAT-006'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1004'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1004' AND p.position_code='battery bay'), 'battery bay', '2025-09-04 09:40:00', NULL, 'fleet configuration completion', 5),
+((SELECT component_id FROM Component WHERE component_no='FUEL-007'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1005'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1005' AND p.position_code='fuel control bay'), 'fuel control bay', '2025-09-05 09:00:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='ECS-007'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1005'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1005' AND p.position_code='air conditioning bay'), 'air conditioning bay', '2025-09-05 09:10:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='BR3-001'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1005'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1005' AND p.position_code='brake assembly'), 'brake assembly', '2025-09-05 09:20:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='BAT-007'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1005'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1005' AND p.position_code='battery bay'), 'battery bay', '2025-09-05 09:30:00', NULL, 'fleet configuration completion', 1),
+((SELECT component_id FROM Component WHERE component_no='LDG-006'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='landing gear bay'), 'landing gear bay', '2025-09-07 09:00:00', NULL, 'fleet configuration completion', 9),
+((SELECT component_id FROM Component WHERE component_no='AVI-006'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='avionics bay'), 'avionics bay', '2025-09-07 09:10:00', NULL, 'fleet configuration completion', 9),
+((SELECT component_id FROM Component WHERE component_no='NAV-009'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='navigation bay'), 'navigation bay', '2025-09-07 09:20:00', NULL, 'fleet configuration completion', 9),
+((SELECT component_id FROM Component WHERE component_no='HYD-009'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='hydraulic system bay'), 'hydraulic system bay', '2025-09-07 09:30:00', NULL, 'fleet configuration completion', 9),
+((SELECT component_id FROM Component WHERE component_no='FUEL-008'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='fuel control bay'), 'fuel control bay', '2025-09-07 09:40:00', NULL, 'fleet configuration completion', 9),
+((SELECT component_id FROM Component WHERE component_no='ECS-008'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='air conditioning bay'), 'air conditioning bay', '2025-09-07 09:50:00', NULL, 'fleet configuration completion', 9),
+((SELECT component_id FROM Component WHERE component_no='BRK-005'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='brake assembly'), 'brake assembly', '2025-09-07 10:00:00', NULL, 'fleet configuration completion', 9),
+((SELECT component_id FROM Component WHERE component_no='BAT-008'), (SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1007'), (SELECT position_id FROM AircraftInstallPosition p JOIN Aircraft a ON p.aircraft_id=a.aircraft_id WHERE a.aircraft_no='AC-1007' AND p.position_code='battery bay'), 'battery bay', '2025-09-07 10:10:00', NULL, 'fleet configuration completion', 9);
+
+UPDATE InstallationRecord ir
+JOIN Component c ON ir.component_id = c.component_id
+SET ir.install_time = TIMESTAMP('2024-01-01', TIME(ir.install_time)),
+    ir.install_reason = 'baseline fleet configuration'
+WHERE c.batch_no LIKE 'CFG-%'
+  AND ir.uninstall_time IS NULL;
+
+-- 39 条维修记录，覆盖多种类型和 pending/passed/failed/scrapped 结果，并形成可分析的维修间隔。
 INSERT INTO MaintenanceRecord (component_id, maintenance_type, start_time, end_time, result, description, technician_id) VALUES
 ((SELECT component_id FROM Component WHERE component_no='ENG-001'), 'overhaul', '2024-12-21 08:00:00', '2024-12-28 17:00:00', 'scrapped', 'Life limit and turbine damage confirmed.', 2),
 ((SELECT component_id FROM Component WHERE component_no='NAV-001'), 'replacement check', '2024-11-19 08:00:00', '2024-11-20 15:00:00', 'failed', 'Navigation signal remained unstable.', 6),
@@ -229,30 +301,30 @@ INSERT INTO MaintenanceRecord (component_id, maintenance_type, start_time, end_t
 ((SELECT component_id FROM Component WHERE component_no='ENB-001'), 'overhaul', '2024-10-02 08:00:00', '2024-10-09 17:00:00', 'scrapped', 'Core damage exceeds repair limit.', 6),
 ((SELECT component_id FROM Component WHERE component_no='AV3-001'), 'fault repair', '2024-07-13 08:00:00', '2024-07-15 17:00:00', 'scrapped', 'Irreparable circuit damage.', 8),
 ((SELECT component_id FROM Component WHERE component_no='BRB-001'), 'replacement check', '2024-05-16 08:00:00', '2024-05-17 12:00:00', 'failed', 'Brake wear exceeds teaching threshold.', 2),
-((SELECT component_id FROM Component WHERE component_no='ENG-002'), 'online inspection', '2025-02-10 08:00:00', '2025-02-10 12:00:00', 'passed', 'Online inspection passed while installed.', 6),
-((SELECT component_id FROM Component WHERE component_no='NAV-002'), 'scheduled inspection', '2025-02-12 08:00:00', '2025-02-12 14:00:00', 'passed', 'Navigation accuracy check passed.', 2),
+((SELECT component_id FROM Component WHERE component_no='ENG-002'), 'online inspection', '2025-02-11 08:00:00', '2025-02-11 12:00:00', 'passed', 'Online inspection passed while installed.', 6),
+((SELECT component_id FROM Component WHERE component_no='NAV-002'), 'online inspection', '2025-02-12 16:00:00', '2025-02-12 18:00:00', 'passed', 'Navigation line accuracy check passed after landing.', 2),
 ((SELECT component_id FROM Component WHERE component_no='HYD-002'), 'online inspection', '2025-02-14 08:00:00', '2025-02-14 11:00:00', 'passed', 'Hydraulic pressure stable.', 8),
-((SELECT component_id FROM Component WHERE component_no='AVI-002'), 'scheduled inspection', '2025-03-01 08:00:00', '2025-03-01 15:00:00', 'passed', 'Avionics self-test passed.', 6),
+((SELECT component_id FROM Component WHERE component_no='AVI-002'), 'online inspection', '2025-03-01 08:00:00', '2025-03-01 15:00:00', 'passed', 'Installed avionics self-test passed.', 6),
 ((SELECT component_id FROM Component WHERE component_no='FUEL-002'), 'online inspection', '2025-03-03 08:00:00', '2025-03-03 12:00:00', 'passed', 'Fuel control response normal.', 2),
-((SELECT component_id FROM Component WHERE component_no='ECS-002'), 'fault repair', '2025-03-05 08:00:00', '2025-03-06 16:00:00', 'passed', 'Cabin pressure sensor replaced.', 8),
-((SELECT component_id FROM Component WHERE component_no='BRK-002'), 'scheduled inspection', '2025-03-08 08:00:00', '2025-03-08 13:00:00', 'passed', 'Brake lining inspection passed.', 6),
+((SELECT component_id FROM Component WHERE component_no='ECS-002'), 'online inspection', '2025-03-05 08:00:00', '2025-03-05 12:00:00', 'passed', 'Installed cabin pressure sensor calibration passed.', 8),
+((SELECT component_id FROM Component WHERE component_no='BRK-002'), 'online inspection', '2025-03-08 08:00:00', '2025-03-08 13:00:00', 'passed', 'Installed brake wear inspection passed.', 6),
 ((SELECT component_id FROM Component WHERE component_no='ENG-003'), 'online inspection', '2025-03-10 08:00:00', '2025-03-10 12:00:00', 'passed', 'Engine trend data normal.', 2),
-((SELECT component_id FROM Component WHERE component_no='NAV-003'), 'replacement check', '2025-03-12 08:00:00', '2025-03-12 15:00:00', 'passed', 'Replacement verification passed.', 8),
-((SELECT component_id FROM Component WHERE component_no='ENB-002'), 'scheduled inspection', '2025-03-15 08:00:00', '2025-03-16 15:00:00', 'passed', 'Scheduled inspection completed.', 6),
-((SELECT component_id FROM Component WHERE component_no='NAV-004'), 'fault repair', '2025-03-18 08:00:00', '2025-03-19 15:00:00', 'failed', 'Intermittent signal fault remains.', 2),
+((SELECT component_id FROM Component WHERE component_no='NAV-003'), 'online inspection', '2025-03-12 15:00:00', '2025-03-12 18:00:00', 'passed', 'Installed navigation replacement verification passed after landing.', 8),
+((SELECT component_id FROM Component WHERE component_no='ENB-002'), 'online inspection', '2025-03-15 14:00:00', '2025-03-15 18:00:00', 'passed', 'Engine line inspection completed after landing.', 6),
+((SELECT component_id FROM Component WHERE component_no='NAV-004'), 'online inspection', '2025-03-18 13:00:00', '2025-03-18 16:00:00', 'passed', 'Installed navigation signal check passed after calibration.', 2),
 ((SELECT component_id FROM Component WHERE component_no='HYD-003'), 'online inspection', '2025-03-21 08:00:00', '2025-03-21 12:00:00', 'passed', 'Pressure test passed.', 8),
-((SELECT component_id FROM Component WHERE component_no='AVB-002'), 'scheduled inspection', '2025-03-23 08:00:00', '2025-03-23 14:00:00', 'passed', 'Avionics inspection passed.', 6),
-((SELECT component_id FROM Component WHERE component_no='EN3-002'), 'overhaul', '2025-03-25 08:00:00', '2025-03-30 17:00:00', 'passed', 'Teaching overhaul completed.', 2),
+((SELECT component_id FROM Component WHERE component_no='AVB-002'), 'online inspection', '2025-03-23 08:00:00', '2025-03-23 14:00:00', 'passed', 'Installed avionics inspection passed.', 6),
+((SELECT component_id FROM Component WHERE component_no='EN3-002'), 'online inspection', '2025-03-25 08:00:00', '2025-03-25 12:00:00', 'passed', 'Installed engine trend inspection completed.', 2),
 ((SELECT component_id FROM Component WHERE component_no='NAV-006'), 'online inspection', '2025-04-01 08:00:00', '2025-04-01 12:00:00', 'passed', 'Navigation line check passed.', 8),
-((SELECT component_id FROM Component WHERE component_no='LD3-002'), 'scheduled inspection', '2025-04-03 08:00:00', '2025-04-04 15:00:00', 'passed', 'Landing gear inspection passed.', 6),
-((SELECT component_id FROM Component WHERE component_no='ENG-004'), 'fault repair', '2025-04-06 08:00:00', '2025-04-07 15:00:00', 'passed', 'Oil sensor replaced.', 2),
-((SELECT component_id FROM Component WHERE component_no='EN3-004'), 'overhaul', '2025-05-10 08:00:00', NULL, 'pending', 'Engine overhaul in progress.', 6),
-((SELECT component_id FROM Component WHERE component_no='NAV-007'), 'fault repair', '2025-05-11 08:00:00', NULL, 'pending', 'Navigation fault isolation in progress.', 8),
-((SELECT component_id FROM Component WHERE component_no='HYD-006'), 'fault repair', '2025-05-12 08:00:00', NULL, 'pending', 'Hydraulic pump repair in progress.', 2),
-((SELECT component_id FROM Component WHERE component_no='AVB-003'), 'replacement check', '2025-05-13 08:00:00', NULL, 'pending', 'Replacement verification pending.', 6),
-((SELECT component_id FROM Component WHERE component_no='LD3-003'), 'scheduled inspection', '2025-05-14 08:00:00', NULL, 'pending', 'Landing gear inspection pending.', 8),
+((SELECT component_id FROM Component WHERE component_no='LD3-002'), 'online inspection', '2025-04-03 08:00:00', '2025-04-03 12:00:00', 'passed', 'Installed landing gear functional inspection passed.', 6),
+((SELECT component_id FROM Component WHERE component_no='ENG-004'), 'online inspection', '2025-04-06 08:00:00', '2025-04-06 12:00:00', 'passed', 'Installed engine oil sensor signal inspection passed.', 2),
+((SELECT component_id FROM Component WHERE component_no='EN3-004'), 'overhaul', '2026-06-10 08:00:00', NULL, 'pending', 'Engine overhaul in progress.', 6),
+((SELECT component_id FROM Component WHERE component_no='NAV-007'), 'fault repair', '2026-06-11 08:00:00', NULL, 'pending', 'Navigation fault isolation in progress.', 8),
+((SELECT component_id FROM Component WHERE component_no='HYD-006'), 'fault repair', '2026-06-12 08:00:00', NULL, 'pending', 'Hydraulic pump repair in progress.', 2),
+((SELECT component_id FROM Component WHERE component_no='AVB-003'), 'replacement check', '2026-06-13 08:00:00', NULL, 'pending', 'Replacement verification pending.', 6),
+((SELECT component_id FROM Component WHERE component_no='LD3-003'), 'scheduled inspection', '2026-06-14 08:00:00', NULL, 'pending', 'Landing gear inspection pending.', 8),
 ((SELECT component_id FROM Component WHERE component_no='HYD-005'), 'scheduled inspection', '2025-02-01 08:00:00', '2025-02-02 16:00:00', 'failed', 'Pressure fluctuation requires further repair.', 2),
-((SELECT component_id FROM Component WHERE component_no='NAV-005'), 'online inspection', '2025-06-04 09:00:00', NULL, 'pending', 'Online inspection for installed-state verification.', 2);
+((SELECT component_id FROM Component WHERE component_no='NAV-005'), 'online inspection', '2026-06-16 09:00:00', NULL, 'pending', 'Online inspection for installed-state verification.', 2);
 
 -- 补充同一部件的多次已完成维修，使维修间隔和周期预警呈现 normal/warning/due/overdue 多层结果。
 INSERT INTO MaintenanceRecord (component_id, maintenance_type, start_time, end_time, result, description, technician_id) VALUES
@@ -265,16 +337,33 @@ INSERT INTO MaintenanceRecord (component_id, maintenance_type, start_time, end_t
 ((SELECT component_id FROM Component WHERE component_no='BRK-002'), 'online inspection', '2025-07-15 09:00:00', '2025-07-15 12:00:00', 'passed', 'Brake wear inspection passed.', 6),
 ((SELECT component_id FROM Component WHERE component_no='AVI-002'), 'online inspection', '2025-08-11 08:00:00', '2025-08-11 11:00:00', 'passed', 'Avionics inspection after latest flight passed.', 2);
 
--- 40 条飞行记录。AC-1001 累计 80 小时形成 normal/warning/critical 多层风险。
+-- 57 条候选飞行记录；插入后仅保留在飞行全程具备完整位置配置的记录。
 INSERT INTO FlightLog (aircraft_id, mission_no, takeoff_time, landing_time, flight_hours, mission_type, recorded_by) VALUES
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250101-01', '2025-01-10 06:00:00', '2025-01-10 16:00:00', 10.00, 'training', 4),
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250201-01', '2025-02-10 06:00:00', '2025-02-10 16:00:00', 10.00, 'patrol', 10),
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250301-01', '2025-03-10 06:00:00', '2025-03-10 16:00:00', 10.00, 'transport', 4),
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250401-01', '2025-04-10 06:00:00', '2025-04-10 16:00:00', 10.00, 'training', 10),
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250501-01', '2025-05-10 06:00:00', '2025-05-10 16:00:00', 10.00, 'patrol', 4),
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250601-01', '2025-06-10 06:00:00', '2025-06-10 16:00:00', 10.00, 'transport', 10),
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250701-01', '2025-07-10 06:00:00', '2025-07-10 16:00:00', 10.00, 'training', 4),
-((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250801-01', '2025-08-10 06:00:00', '2025-08-10 16:00:00', 10.00, 'patrol', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-240210-01', '2024-02-10 07:00:00', '2024-02-10 13:00:00', 6.00, 'training', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-240410-01', '2024-04-10 07:00:00', '2024-04-10 13:00:00', 6.00, 'patrol', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-240610-01', '2024-06-10 07:00:00', '2024-06-10 13:00:00', 6.00, 'transport', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-240910-01', '2024-09-10 07:00:00', '2024-09-10 13:00:00', 6.00, 'training', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), 'FL-240112-02', '2024-01-12 08:00:00', '2024-01-12 13:00:00', 5.00, 'training', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), 'FL-240412-02', '2024-04-12 08:00:00', '2024-04-12 13:00:00', 5.00, 'patrol', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), 'FL-240712-02', '2024-07-12 08:00:00', '2024-07-12 13:00:00', 5.00, 'transport', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1003'), 'FL-240215-03', '2024-02-15 08:00:00', '2024-02-15 13:00:00', 5.00, 'training', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1003'), 'FL-240515-03', '2024-05-15 08:00:00', '2024-05-15 13:00:00', 5.00, 'patrol', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1003'), 'FL-240815-03', '2024-08-15 08:00:00', '2024-08-15 13:00:00', 5.00, 'transport', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1004'), 'FL-240118-04', '2024-01-18 08:00:00', '2024-01-18 12:00:00', 4.00, 'training', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1004'), 'FL-240418-04', '2024-04-18 08:00:00', '2024-04-18 12:00:00', 4.00, 'patrol', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1005'), 'FL-240220-05', '2024-02-20 07:00:00', '2024-02-20 13:00:00', 6.00, 'training', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1005'), 'FL-240520-05', '2024-05-20 07:00:00', '2024-05-20 13:00:00', 6.00, 'patrol', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1009'), 'FL-230310-09', '2023-03-10 09:00:00', '2023-03-10 13:00:00', 4.00, 'training', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1009'), 'FL-230810-09', '2023-08-10 09:00:00', '2023-08-10 13:00:00', 4.00, 'patrol', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1009'), 'FL-240210-09', '2024-02-10 09:00:00', '2024-02-10 13:00:00', 4.00, 'transport', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250101-01', '2025-01-10 06:00:00', '2025-01-10 13:00:00', 7.00, 'training', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250201-01', '2025-02-10 06:00:00', '2025-02-10 13:00:00', 7.00, 'patrol', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250301-01', '2025-03-10 06:00:00', '2025-03-10 13:00:00', 7.00, 'transport', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250401-01', '2025-04-10 06:00:00', '2025-04-10 13:00:00', 7.00, 'training', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250501-01', '2025-05-10 06:00:00', '2025-05-10 13:00:00', 7.00, 'patrol', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250601-01', '2025-06-10 06:00:00', '2025-06-10 13:00:00', 7.00, 'transport', 10),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250701-01', '2025-07-10 06:00:00', '2025-07-10 13:00:00', 7.00, 'training', 4),
+((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1001'), 'FL-250801-01', '2025-08-10 06:00:00', '2025-08-10 15:00:00', 9.00, 'patrol', 10),
 ((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), 'FL-250112-02', '2025-01-12 07:00:00', '2025-01-12 14:00:00', 7.00, 'training', 4),
 ((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), 'FL-250212-02', '2025-02-12 07:00:00', '2025-02-12 14:00:00', 7.00, 'patrol', 10),
 ((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1002'), 'FL-250312-02', '2025-03-12 07:00:00', '2025-03-12 14:00:00', 7.00, 'transport', 4),
@@ -308,18 +397,42 @@ INSERT INTO FlightLog (aircraft_id, mission_no, takeoff_time, landing_time, flig
 ((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1008'), 'FL-250101-08', '2025-01-01 11:00:00', '2025-01-01 13:00:00', 2.00, 'patrol', 4),
 ((SELECT aircraft_id FROM Aircraft WHERE aircraft_no='AC-1008'), 'FL-250201-08', '2025-02-01 11:00:00', '2025-02-01 13:00:00', 2.00, 'test flight', 10);
 
+-- 飞行日志只能保留在全部有效安装位均有部件覆盖的航段。
+-- 清理后仍保留 33 条代表性飞行记录，并杜绝“缺件飞行”的时间线硬伤。
+DELETE fl
+FROM FlightLog fl
+WHERE EXISTS (
+    SELECT 1
+    FROM AircraftInstallPosition p
+    WHERE p.aircraft_id = fl.aircraft_id
+      AND p.is_active = TRUE
+      AND NOT EXISTS (
+          SELECT 1
+          FROM InstallationRecord ir
+          WHERE ir.aircraft_id = fl.aircraft_id
+            AND ir.position_id = p.position_id
+            AND ir.install_time <= fl.takeoff_time
+            AND (ir.uninstall_time IS NULL OR ir.uninstall_time >= fl.landing_time)
+      )
+);
+
+-- BAT-002 已超过维修周期，当前飞机按规则停场；维修通过后可由存储过程安全恢复服役。
+UPDATE Aircraft
+SET service_status = 'maintenance'
+WHERE aircraft_no = 'AC-1001';
+
 -- 20 条维修计划：4 待执行、4 执行中、7 completed、5 cancelled。
 INSERT INTO MaintenancePlan (component_id, planned_type, planned_time, planned_reason, status, created_by, created_at, completed_at, related_maintenance_id) VALUES
-((SELECT component_id FROM Component WHERE component_no='ENG-002'), 'life_limit_check', '2025-09-05 09:00:00', 'High life usage requires focused inspection.', 'pending', 3, '2025-08-15 09:00:00', NULL, NULL),
-((SELECT component_id FROM Component WHERE component_no='NAV-002'), 'life_limit_check', '2025-09-06 09:00:00', 'Critical navigation life usage.', 'pending', 7, '2025-08-15 09:10:00', NULL, NULL),
-((SELECT component_id FROM Component WHERE component_no='HYD-002'), 'preventive_maintenance', '2025-09-07 09:00:00', 'Preventive pressure inspection.', 'pending', 3, '2025-08-15 09:20:00', NULL, NULL),
-((SELECT component_id FROM Component WHERE component_no='BRK-002'), 'life_limit_check', '2025-09-08 09:00:00', 'Brake life warning follow-up.', 'pending', 7, '2025-08-15 09:30:00', NULL, NULL),
-((SELECT component_id FROM Component WHERE component_no='EN3-004'), 'scheduled_inspection', '2025-05-10 08:00:00', 'Follow-up after overhaul.', 'pending', 3, '2025-05-01 09:00:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-004') AND result='pending' LIMIT 1)),
-((SELECT component_id FROM Component WHERE component_no='NAV-007'), 'preventive_maintenance', '2025-05-11 08:00:00', 'Navigation fault prevention plan.', 'pending', 7, '2025-05-01 09:10:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND result='pending' LIMIT 1)),
-((SELECT component_id FROM Component WHERE component_no='HYD-006'), 'scheduled_inspection', '2025-05-12 08:00:00', 'Hydraulic repair quality review.', 'pending', 3, '2025-05-01 09:20:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND result='pending' LIMIT 1)),
-((SELECT component_id FROM Component WHERE component_no='LD3-003'), 'preventive_maintenance', '2025-05-14 08:00:00', 'Landing gear preventive inspection.', 'pending', 7, '2025-05-01 09:30:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND result='pending' LIMIT 1)),
-((SELECT component_id FROM Component WHERE component_no='ENG-003'), 'scheduled_inspection', '2025-04-15 09:00:00', 'Routine engine inspection.', 'completed', 3, '2025-03-15 09:00:00', '2025-04-15 16:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-003') LIMIT 1)),
-((SELECT component_id FROM Component WHERE component_no='NAV-003'), 'post_replacement_check', '2025-03-12 08:00:00', 'Validate replacement installation.', 'completed', 7, '2025-03-01 09:00:00', '2025-03-12 15:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-003') LIMIT 1)),
+((SELECT component_id FROM Component WHERE component_no='ENG-002'), 'life_limit_check', '2026-07-05 09:00:00', 'High life usage requires focused inspection.', 'pending', 3, '2026-06-15 09:00:00', NULL, NULL),
+((SELECT component_id FROM Component WHERE component_no='NAV-002'), 'life_limit_check', '2026-07-06 09:00:00', 'Critical navigation life usage.', 'pending', 7, '2026-06-15 09:10:00', NULL, NULL),
+((SELECT component_id FROM Component WHERE component_no='HYD-002'), 'preventive_maintenance', '2026-07-07 09:00:00', 'Preventive pressure inspection.', 'pending', 3, '2026-06-15 09:20:00', NULL, NULL),
+((SELECT component_id FROM Component WHERE component_no='BRK-002'), 'life_limit_check', '2026-07-08 09:00:00', 'Brake life warning follow-up.', 'pending', 7, '2026-06-15 09:30:00', NULL, NULL),
+((SELECT component_id FROM Component WHERE component_no='EN3-004'), 'scheduled_inspection', '2026-06-10 08:00:00', 'Follow-up after overhaul.', 'pending', 3, '2026-06-01 09:00:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-004') AND result='pending' LIMIT 1)),
+((SELECT component_id FROM Component WHERE component_no='NAV-007'), 'preventive_maintenance', '2026-06-11 08:00:00', 'Navigation fault prevention plan.', 'pending', 7, '2026-06-01 09:10:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND result='pending' LIMIT 1)),
+((SELECT component_id FROM Component WHERE component_no='HYD-006'), 'scheduled_inspection', '2026-06-12 08:00:00', 'Hydraulic repair quality review.', 'pending', 3, '2026-06-01 09:20:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND result='pending' LIMIT 1)),
+((SELECT component_id FROM Component WHERE component_no='LD3-003'), 'preventive_maintenance', '2026-06-14 08:00:00', 'Landing gear preventive inspection.', 'pending', 7, '2026-06-01 09:30:00', NULL, (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND result='pending' LIMIT 1)),
+((SELECT component_id FROM Component WHERE component_no='ENG-003'), 'scheduled_inspection', '2025-03-10 08:00:00', 'Routine engine inspection.', 'completed', 3, '2025-03-01 09:00:00', '2025-03-10 12:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-003') LIMIT 1)),
+((SELECT component_id FROM Component WHERE component_no='NAV-003'), 'post_replacement_check', '2025-03-12 15:00:00', 'Validate replacement installation after landing.', 'completed', 7, '2025-03-01 09:00:00', '2025-03-12 18:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-003') LIMIT 1)),
 ((SELECT component_id FROM Component WHERE component_no='ENB-002'), 'preventive_maintenance', '2025-03-16 09:00:00', 'Scheduled engine prevention task.', 'completed', 3, '2025-03-01 09:10:00', '2025-03-16 15:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENB-002') LIMIT 1)),
 ((SELECT component_id FROM Component WHERE component_no='HYD-003'), 'scheduled_inspection', '2025-03-21 08:00:00', 'Hydraulic pressure inspection.', 'completed', 7, '2025-03-05 09:00:00', '2025-03-21 12:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-003') LIMIT 1)),
 ((SELECT component_id FROM Component WHERE component_no='EN3-002'), 'preventive_maintenance', '2025-03-30 09:00:00', 'Teaching overhaul plan.', 'completed', 3, '2025-03-10 09:00:00', '2025-03-30 17:00:00', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-002') LIMIT 1)),
@@ -348,34 +461,34 @@ INSERT INTO RetirementRecord (component_id, retirement_time, retirement_reason, 
 
 -- 28 条人工审计日志，覆盖关键业务类型及维修计划开始执行；均使用已有操作人员。
 INSERT INTO AuditLog (operator_id, operation_type, target_table, target_id, operation_time, operation_detail) VALUES
-(5, 'replace_component', 'Component', (SELECT component_id FROM Component WHERE component_no='ENG-002'), '2025-01-01 08:00:00', 'Replaced component ENG-001 with ENG-002 on aircraft AC-1001 at left engine position'),
-(5, 'replace_component', 'Component', (SELECT component_id FROM Component WHERE component_no='NAV-002'), '2025-01-01 08:10:00', 'Replaced component NAV-001 with NAV-002 on aircraft AC-1001 at navigation bay'),
-(9, 'replace_component', 'Component', (SELECT component_id FROM Component WHERE component_no='ENB-002'), '2025-01-03 08:00:00', 'Replaced component ENB-001 with ENB-002 on aircraft AC-1003 at left engine position'),
-(9, 'replace_component', 'Component', (SELECT component_id FROM Component WHERE component_no='BRB-002'), '2025-01-03 08:40:00', 'Replaced component BRB-001 with BRB-002 on aircraft AC-1003 at brake assembly'),
-(3, 'retire_component', 'Component', (SELECT component_id FROM Component WHERE component_no='ENG-001'), '2024-12-29 10:00:00', 'Retired component ENG-001; reason: life limit reached'),
-(7, 'retire_component', 'Component', (SELECT component_id FROM Component WHERE component_no='HYD-001'), '2024-09-26 10:00:00', 'Retired component HYD-001; reason: irreparable damage found during inspection'),
-(3, 'retire_component', 'Component', (SELECT component_id FROM Component WHERE component_no='AVI-001'), '2024-08-14 10:00:00', 'Retired component AVI-001; reason: economic retirement'),
-(7, 'retire_component', 'Component', (SELECT component_id FROM Component WHERE component_no='BRB-001'), '2024-05-18 10:00:00', 'Retired component BRB-001; reason: life limit reached after replacement'),
-(2, 'complete_maintenance', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-002') LIMIT 1), '2025-02-10 12:00:00', 'Completed maintenance for component ENG-002; result: passed'),
-(6, 'complete_maintenance', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-002') LIMIT 1), '2025-02-12 14:00:00', 'Completed maintenance for component NAV-002; result: passed'),
-(8, 'complete_maintenance', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-004') LIMIT 1), '2025-03-19 15:00:00', 'Completed maintenance for component NAV-004; result: failed'),
-(2, 'complete_maintenance', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-002') LIMIT 1), '2025-03-30 17:00:00', 'Completed maintenance for component EN3-002; result: passed'),
-(3, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-002') AND status='pending' LIMIT 1), '2025-08-15 09:00:00', 'Created maintenance plan for component ENG-002; type: life_limit_check'),
-(7, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-002') AND status='pending' LIMIT 1), '2025-08-15 09:10:00', 'Created maintenance plan for component NAV-002; type: life_limit_check'),
-(3, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-002') AND status='pending' LIMIT 1), '2025-08-15 09:20:00', 'Created maintenance plan for component HYD-002; type: preventive_maintenance'),
-(7, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND status='pending' LIMIT 1), '2025-05-01 09:30:00', 'Created maintenance plan for component LD3-003; type: preventive_maintenance'),
-(3, 'complete_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-003') AND status='completed' LIMIT 1), '2025-04-15 16:00:00', 'Completed maintenance plan for component ENG-003; type: scheduled_inspection'),
-(7, 'complete_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-003') AND status='completed' LIMIT 1), '2025-03-12 15:00:00', 'Completed maintenance plan for component NAV-003; type: post_replacement_check'),
-(3, 'complete_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENB-002') AND status='completed' LIMIT 1), '2025-03-16 15:00:00', 'Completed maintenance plan for component ENB-002; type: preventive_maintenance'),
-(7, 'cancel_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-005') AND status='cancelled' LIMIT 1), '2025-04-20 10:00:00', 'Cancelled maintenance plan for component ENG-005; type: scheduled_inspection'),
-(3, 'cancel_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-008') AND status='cancelled' LIMIT 1), '2025-04-21 10:00:00', 'Cancelled maintenance plan for component NAV-008; type: preventive_maintenance'),
-(7, 'cancel_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='AVI-003') AND status='cancelled' LIMIT 1), '2025-04-22 10:00:00', 'Cancelled maintenance plan for component AVI-003; type: post_replacement_check'),
-(4, 'complete_maintenance', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-001') LIMIT 1), '2024-12-28 17:00:00', 'Completed maintenance for component ENG-001; result: scrapped'),
-(10, 'retire_component', 'Component', (SELECT component_id FROM Component WHERE component_no='BAT-001'), '2024-06-03 10:40:00', 'Retired component BAT-001; reason: replacement retirement'),
-(3, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-004') AND status='pending' LIMIT 1), '2025-05-10 08:00:00', CONCAT('Started maintenance plan for component EN3-004; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-004') AND result='pending' LIMIT 1), '; type: scheduled_inspection')),
-(7, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND status='pending' LIMIT 1), '2025-05-11 08:00:00', CONCAT('Started maintenance plan for component NAV-007; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND result='pending' LIMIT 1), '; type: preventive_maintenance')),
-(3, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND status='pending' LIMIT 1), '2025-05-12 08:00:00', CONCAT('Started maintenance plan for component HYD-006; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND result='pending' LIMIT 1), '; type: scheduled_inspection')),
-(7, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND status='pending' LIMIT 1), '2025-05-14 08:00:00', CONCAT('Started maintenance plan for component LD3-003; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND result='pending' LIMIT 1), '; type: preventive_maintenance'));
+(5, 'component_replacement', 'InstallationRecord', (SELECT installation_id FROM InstallationRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-002') AND uninstall_time IS NULL LIMIT 1), '2025-01-01 08:00:00', 'Replaced component ENG-001 with ENG-002 on aircraft AC-1001 at left engine position'),
+(5, 'component_replacement', 'InstallationRecord', (SELECT installation_id FROM InstallationRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-002') AND uninstall_time IS NULL LIMIT 1), '2025-01-01 08:10:00', 'Replaced component NAV-001 with NAV-002 on aircraft AC-1001 at navigation bay'),
+(9, 'component_replacement', 'InstallationRecord', (SELECT installation_id FROM InstallationRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENB-002') AND uninstall_time IS NULL LIMIT 1), '2025-01-03 08:00:00', 'Replaced component ENB-001 with ENB-002 on aircraft AC-1003 at left engine position'),
+(9, 'component_replacement', 'InstallationRecord', (SELECT installation_id FROM InstallationRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='BRB-002') AND uninstall_time IS NULL LIMIT 1), '2025-01-03 08:40:00', 'Replaced component BRB-001 with BRB-002 on aircraft AC-1003 at brake assembly'),
+(3, 'component_retirement', 'RetirementRecord', (SELECT retirement_id FROM RetirementRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-001')), '2024-12-29 10:00:00', 'Retired component ENG-001; reason: life limit reached'),
+(7, 'component_retirement', 'RetirementRecord', (SELECT retirement_id FROM RetirementRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-001')), '2024-09-26 10:00:00', 'Retired component HYD-001; reason: irreparable damage found during inspection'),
+(3, 'component_retirement', 'RetirementRecord', (SELECT retirement_id FROM RetirementRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='AVI-001')), '2024-08-14 10:00:00', 'Retired component AVI-001; reason: economic retirement'),
+(7, 'component_retirement', 'RetirementRecord', (SELECT retirement_id FROM RetirementRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='BRB-001')), '2024-05-18 10:00:00', 'Retired component BRB-001; reason: life limit reached after replacement'),
+(2, 'maintenance_completion', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-002') LIMIT 1), '2025-02-11 12:00:00', 'Completed maintenance for component ENG-002; result: passed'),
+(6, 'maintenance_completion', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-002') LIMIT 1), '2025-02-12 18:00:00', 'Completed maintenance for component NAV-002; result: passed'),
+(8, 'maintenance_completion', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-004') LIMIT 1), '2025-03-18 16:00:00', 'Completed maintenance for component NAV-004; result: passed'),
+(2, 'maintenance_completion', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-002') LIMIT 1), '2025-03-25 12:00:00', 'Completed maintenance for component EN3-002; result: passed'),
+(3, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-002') AND status='pending' LIMIT 1), '2026-06-15 09:00:00', 'Created maintenance plan for component ENG-002; type: life_limit_check'),
+(7, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-002') AND status='pending' LIMIT 1), '2026-06-15 09:10:00', 'Created maintenance plan for component NAV-002; type: life_limit_check'),
+(3, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-002') AND status='pending' LIMIT 1), '2026-06-15 09:20:00', 'Created maintenance plan for component HYD-002; type: preventive_maintenance'),
+(7, 'create_maintenance_plan', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND status='pending' LIMIT 1), '2026-06-01 09:30:00', 'Created maintenance plan for component LD3-003; type: preventive_maintenance'),
+(3, 'maintenance_plan_completed', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-003') AND status='completed' LIMIT 1), '2025-03-10 12:00:00', 'Completed maintenance plan for component ENG-003; type: scheduled_inspection'),
+(7, 'maintenance_plan_completed', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-003') AND status='completed' LIMIT 1), '2025-03-12 18:00:00', 'Completed maintenance plan for component NAV-003; type: post_replacement_check'),
+(3, 'maintenance_plan_completed', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENB-002') AND status='completed' LIMIT 1), '2025-03-16 15:00:00', 'Completed maintenance plan for component ENB-002; type: preventive_maintenance'),
+(7, 'maintenance_plan_cancelled', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-005') AND status='cancelled' LIMIT 1), '2025-04-20 10:00:00', 'Cancelled maintenance plan for component ENG-005; type: scheduled_inspection'),
+(3, 'maintenance_plan_cancelled', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-008') AND status='cancelled' LIMIT 1), '2025-04-21 10:00:00', 'Cancelled maintenance plan for component NAV-008; type: preventive_maintenance'),
+(7, 'maintenance_plan_cancelled', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='AVI-003') AND status='cancelled' LIMIT 1), '2025-04-22 10:00:00', 'Cancelled maintenance plan for component AVI-003; type: post_replacement_check'),
+(4, 'maintenance_completion', 'MaintenanceRecord', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='ENG-001') LIMIT 1), '2024-12-28 17:00:00', 'Completed maintenance for component ENG-001; result: scrapped'),
+(10, 'component_retirement', 'RetirementRecord', (SELECT retirement_id FROM RetirementRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='BAT-001')), '2024-06-03 10:40:00', 'Retired component BAT-001; reason: replacement retirement'),
+(3, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-004') AND status='pending' LIMIT 1), '2026-06-10 08:00:00', CONCAT('Started maintenance plan for component EN3-004; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='EN3-004') AND result='pending' LIMIT 1), '; type: scheduled_inspection')),
+(7, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND status='pending' LIMIT 1), '2026-06-11 08:00:00', CONCAT('Started maintenance plan for component NAV-007; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND result='pending' LIMIT 1), '; type: preventive_maintenance')),
+(3, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND status='pending' LIMIT 1), '2026-06-12 08:00:00', CONCAT('Started maintenance plan for component HYD-006; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND result='pending' LIMIT 1), '; type: scheduled_inspection')),
+(7, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND status='pending' LIMIT 1), '2026-06-14 08:00:00', CONCAT('Started maintenance plan for component LD3-003; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND result='pending' LIMIT 1), '; type: preventive_maintenance'));
 
 -- 初始化后计数与一致性快速检查。
 SELECT 'Operator' AS table_name, COUNT(*) AS row_count FROM Operator

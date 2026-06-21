@@ -341,6 +341,8 @@ BEGIN
     DECLARE v_active_install_count INT DEFAULT 0;
     DECLARE v_rework_plan_id INT DEFAULT NULL;
     DECLARE v_related_plan_id INT DEFAULT NULL;
+    DECLARE v_aircraft_id INT DEFAULT NULL;
+    DECLARE v_aircraft_released INT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -402,6 +404,84 @@ BEGIN
         SET status = IF(v_active_install_count > 0, 'installed', 'available')
         WHERE component_id = v_component_id
           AND is_retired = FALSE;
+
+        -- 在线维修通过后，仅在没有其他逾期、未完成维修或寿命到限部件时恢复飞机服役。
+        IF v_active_install_count > 0 THEN
+            SELECT MAX(aircraft_id) INTO v_aircraft_id
+            FROM InstallationRecord
+            WHERE component_id = v_component_id
+              AND uninstall_time IS NULL;
+
+            UPDATE Aircraft a
+            SET a.service_status = 'active'
+            WHERE a.aircraft_id = v_aircraft_id
+              AND a.service_status = 'maintenance'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM InstallationRecord active_ir
+                  JOIN MaintenanceRecord pending_mr
+                    ON pending_mr.component_id = active_ir.component_id
+                   AND pending_mr.result = 'pending'
+                  WHERE active_ir.aircraft_id = a.aircraft_id
+                    AND active_ir.uninstall_time IS NULL
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM InstallationRecord active_ir
+                  JOIN Component active_c ON active_ir.component_id = active_c.component_id
+                  JOIN ComponentModel active_cm ON active_c.model_id = active_cm.model_id
+                  LEFT JOIN (
+                      SELECT component_id, MAX(end_time) AS last_passed_time
+                      FROM MaintenanceRecord
+                      WHERE result = 'passed' AND end_time IS NOT NULL
+                      GROUP BY component_id
+                  ) lpm ON lpm.component_id = active_c.component_id
+                  WHERE active_ir.aircraft_id = a.aircraft_id
+                    AND active_ir.uninstall_time IS NULL
+                    AND (
+                        SELECT COALESCE(SUM(fl.flight_hours), 0)
+                        FROM InstallationRecord history_ir
+                        JOIN FlightLog fl
+                          ON fl.aircraft_id = history_ir.aircraft_id
+                         AND fl.takeoff_time >= history_ir.install_time
+                         AND (history_ir.uninstall_time IS NULL OR fl.landing_time <= history_ir.uninstall_time)
+                        WHERE history_ir.component_id = active_c.component_id
+                          AND (lpm.last_passed_time IS NULL OR fl.takeoff_time >= lpm.last_passed_time)
+                    ) >= active_cm.maintenance_cycle_hours
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM InstallationRecord active_ir
+                  JOIN Component active_c ON active_ir.component_id = active_c.component_id
+                  JOIN ComponentModel active_cm ON active_c.model_id = active_cm.model_id
+                  WHERE active_ir.aircraft_id = a.aircraft_id
+                    AND active_ir.uninstall_time IS NULL
+                    AND (
+                        SELECT COALESCE(SUM(fl.flight_hours), 0)
+                        FROM InstallationRecord history_ir
+                        JOIN FlightLog fl
+                          ON fl.aircraft_id = history_ir.aircraft_id
+                         AND fl.takeoff_time >= history_ir.install_time
+                         AND (history_ir.uninstall_time IS NULL OR fl.landing_time <= history_ir.uninstall_time)
+                        WHERE history_ir.component_id = active_c.component_id
+                    ) >= active_cm.design_life_hours
+              );
+
+            SET v_aircraft_released = ROW_COUNT();
+            IF v_aircraft_released > 0 THEN
+                INSERT INTO AuditLog (
+                    operator_id, operation_type, target_table, target_id,
+                    operation_time, operation_detail
+                ) VALUES (
+                    p_approved_by,
+                    'maintenance_cycle_release',
+                    'Aircraft',
+                    v_aircraft_id,
+                    v_end_time,
+                    CONCAT('Aircraft returned to active service after approved maintenance for component ', v_component_no)
+                );
+            END IF;
+        END IF;
     ELSEIF p_result = 'failed' THEN
         IF v_active_install_count > 0 THEN
             UPDATE Aircraft a

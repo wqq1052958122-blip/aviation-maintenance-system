@@ -131,7 +131,7 @@ class MaintenancePlanCreate(BaseModel):
     planned_type: str
     planned_time: datetime
     planned_reason: Optional[str] = None
-    created_by: Optional[int] = None
+    created_by: int
     related_maintenance_id: Optional[int] = None
 
     model_config = {
