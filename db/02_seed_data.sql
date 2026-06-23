@@ -1,7 +1,7 @@
 -- =====================================================
 -- 文件：02_seed_data.sql
--- 作用：航空部件生命周期与维修管理系统教学演示数据
--- 说明：寿命、周期和飞行时长均为课程展示用模拟值，不代表真实航空参数。
+-- 作用：航空部件生命周期与维修管理系统教学演示数据 + 十万级规模扩展数据
+-- 说明：寿命、周期和飞行时长均为课程展示用模拟值，不代表真实航空参数；后半部分另含十万级关联业务数据。
 -- 执行位置：01_create_tables.sql 之后，03_triggers.sql 之前。
 -- =====================================================
 USE aviation_maintenance;
@@ -495,6 +495,633 @@ INSERT INTO AuditLog (operator_id, operation_type, target_table, target_id, oper
 (7, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND status='pending' LIMIT 1), '2026-06-11 08:00:00', CONCAT('Started maintenance plan for component NAV-007; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='NAV-007') AND result='pending' LIMIT 1), '; type: preventive_maintenance')),
 (3, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND status='pending' LIMIT 1), '2026-06-12 08:00:00', CONCAT('Started maintenance plan for component HYD-006; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='HYD-006') AND result='pending' LIMIT 1), '; type: scheduled_inspection')),
 (7, 'maintenance_plan_started', 'MaintenancePlan', (SELECT plan_id FROM MaintenancePlan WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND status='pending' LIMIT 1), '2026-06-14 08:00:00', CONCAT('Started maintenance plan for component LD3-003; maintenance_id: ', (SELECT maintenance_id FROM MaintenanceRecord WHERE component_id=(SELECT component_id FROM Component WHERE component_no='LD3-003') AND result='pending' LIMIT 1), '; type: preventive_maintenance'));
+
+
+-- =====================================================
+-- 十万级业务规模扩展数据
+-- 说明：本段保留上方教学演示数据，并新增一套独立编号的数据集。
+-- 编号前缀：
+--   AC-Sxxxx      扩展飞机
+--   CMP-C-xxxx-*  当前已安装部件
+--   CMP-H-xxxx-*  已更换的历史部件
+--   CMP-S-xxxxx   备件库存
+--   SIM-Fxxxxxx   扩展飞行任务
+--
+-- 执行顺序仍为：01_create_tables.sql -> 02_seed_data.sql -> 03_triggers.sql。
+-- 本段使用临时辅助表批量构造数据，脚本结束前会删除，不会在数据库中留下辅助表。
+-- =====================================================
+
+-- 扩展型号的寿命和维修周期采用较大的教学模拟值，避免 55 次常规飞行
+-- 在没有维护事件的情况下就触及原演示型号的极小阈值。
+INSERT INTO ComponentModel (
+    model_code, category, design_life_hours, maintenance_cycle_hours, applicable_aircraft_model
+) VALUES
+('ENG-A320-S', 'engine', 20000, 2000, 'A320'),
+('ENG-B737-S', 'engine', 20000, 2000, 'B737'),
+('ENG-A330-S', 'engine', 24000, 2400, 'A330'),
+('LDG-A320-S', 'landing_gear', 25000, 2500, 'A320'),
+('LDG-B737-S', 'landing_gear', 25000, 2500, 'B737'),
+('LDG-A330-S', 'landing_gear', 28000, 2800, 'A330'),
+('NAV-UNIV-S', 'navigation', 30000, 3000, NULL),
+('AVI-A320-S', 'avionics', 22000, 2200, 'A320'),
+('AVI-B737-S', 'avionics', 22000, 2200, 'B737'),
+('AVI-A330-S', 'avionics', 24000, 2400, 'A330'),
+('HYD-UNIV-S', 'hydraulic', 20000, 2000, NULL),
+('FUEL-UNIV-S', 'fuel', 20000, 2000, NULL),
+('ECS-UNIV-S', 'air_conditioning', 18000, 1800, NULL),
+('BRK-A320-S', 'brake', 15000, 1500, 'A320'),
+('BRK-B737-S', 'brake', 15000, 1500, 'B737'),
+('BRK-A330-S', 'brake', 16000, 1600, 'A330'),
+('BAT-UNIV-S', 'battery', 5000, 1000, NULL);
+
+CREATE TEMPORARY TABLE tmp_scale_numbers (
+    n INT NOT NULL PRIMARY KEY
+) ENGINE=Memory;
+
+-- 0 到 99,999 的连续序号；后续每张扩展表按不同范围引用这一序列。
+INSERT INTO tmp_scale_numbers (n)
+SELECT
+    d0.n + 10 * d1.n + 100 * d2.n + 1000 * d3.n + 10000 * d4.n AS n
+FROM
+    (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d0
+CROSS JOIN
+    (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d1
+CROSS JOIN
+    (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d2
+CROSS JOIN
+    (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d3
+CROSS JOIN
+    (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d4;
+
+CREATE TEMPORARY TABLE tmp_scale_position_map (
+    position_index TINYINT NOT NULL PRIMARY KEY,
+    position_code VARCHAR(100) NOT NULL,
+    component_tag VARCHAR(10) NOT NULL
+) ENGINE=Memory;
+
+INSERT INTO tmp_scale_position_map (position_index, position_code, component_tag) VALUES
+(0, 'left engine position', 'ENG'),
+(1, 'landing gear bay', 'LDG'),
+(2, 'avionics bay', 'AVI'),
+(3, 'navigation bay', 'NAV'),
+(4, 'hydraulic system bay', 'HYD'),
+(5, 'fuel control bay', 'FUEL'),
+(6, 'air conditioning bay', 'ECS'),
+(7, 'brake assembly', 'BRK'),
+(8, 'battery bay', 'BAT');
+
+CREATE TEMPORARY TABLE tmp_scale_model_map (
+    model_index TINYINT NOT NULL PRIMARY KEY,
+    model_code VARCHAR(50) NOT NULL
+) ENGINE=Memory;
+
+INSERT INTO tmp_scale_model_map (model_index, model_code) VALUES
+(0, 'ENG-A320-S'), (1, 'ENG-B737-S'), (2, 'ENG-A330-S'),
+(3, 'LDG-A320-S'), (4, 'LDG-B737-S'), (5, 'LDG-A330-S'),
+(6, 'NAV-UNIV-S'),
+(7, 'AVI-A320-S'), (8, 'AVI-B737-S'), (9, 'AVI-A330-S'),
+(10, 'HYD-UNIV-S'), (11, 'FUEL-UNIV-S'), (12, 'ECS-UNIV-S'),
+(13, 'BRK-A320-S'), (14, 'BRK-B737-S'), (15, 'BRK-A330-S'),
+(16, 'BAT-UNIV-S');
+
+-- 1,000 架在役飞机：A320、B737、A330 的比例为 45% / 40% / 15%。
+INSERT INTO Aircraft (aircraft_no, aircraft_model, service_status, start_date, created_at)
+SELECT
+    CONCAT('AC-S', LPAD(sn.n + 1, 4, '0')),
+    CASE
+        WHEN MOD(sn.n, 20) < 9 THEN 'A320'
+        WHEN MOD(sn.n, 20) < 17 THEN 'B737'
+        ELSE 'A330'
+    END,
+    'active',
+    DATE_ADD('2018-01-01', INTERVAL MOD(sn.n * 13, 2000) DAY),
+    DATE_ADD('2023-01-01 08:00:00', INTERVAL MOD(sn.n * 7, 300) DAY)
+FROM tmp_scale_numbers sn
+WHERE sn.n < 1000;
+
+-- 每架扩展飞机均建立 9 个标准安装位，共 9,000 个安装位。
+INSERT INTO AircraftInstallPosition (
+    aircraft_id, position_code, position_name, allowed_category, is_active, created_at
+)
+SELECT
+    a.aircraft_id,
+    p.position_code,
+    CASE p.position_code
+        WHEN 'left engine position' THEN '左侧发动机'
+        WHEN 'landing gear bay' THEN '主起落架舱'
+        WHEN 'avionics bay' THEN '航电设备舱'
+        WHEN 'navigation bay' THEN '导航设备舱'
+        WHEN 'hydraulic system bay' THEN '液压系统舱'
+        WHEN 'fuel control bay' THEN '燃油控制舱'
+        WHEN 'air conditioning bay' THEN '空调系统舱'
+        WHEN 'brake assembly' THEN '刹车组件位'
+        WHEN 'battery bay' THEN '机载电源舱'
+    END,
+    CASE p.position_code
+        WHEN 'left engine position' THEN 'engine'
+        WHEN 'landing gear bay' THEN 'landing_gear'
+        WHEN 'avionics bay' THEN 'avionics'
+        WHEN 'navigation bay' THEN 'navigation'
+        WHEN 'hydraulic system bay' THEN 'hydraulic'
+        WHEN 'fuel control bay' THEN 'fuel'
+        WHEN 'air conditioning bay' THEN 'air_conditioning'
+        WHEN 'brake assembly' THEN 'brake'
+        WHEN 'battery bay' THEN 'battery'
+    END,
+    TRUE,
+    DATE_ADD('2023-01-01 08:00:00', INTERVAL MOD(sn.n * 7, 300) DAY)
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(sn.n + 1, 4, '0'))
+CROSS JOIN tmp_scale_position_map p
+WHERE sn.n < 1000;
+
+-- 9,000 个当前在役部件：每个激活安装位恰好对应一个当前部件。
+INSERT INTO Component (
+    component_no, model_id, batch_no, production_date, stock_in_time,
+    status, total_flight_hours, is_retired
+)
+SELECT
+    CONCAT('CMP-C-', LPAD(sn.n + 1, 4, '0'), '-', pm.component_tag),
+    cm.model_id,
+    CONCAT('B-C-', DATE_FORMAT(DATE_ADD('2022-01-01', INTERVAL MOD(sn.n * 17 + pm.position_index, 730) DAY), '%Y%m')),
+    DATE_ADD('2022-01-01', INTERVAL MOD(sn.n * 17 + pm.position_index, 730) DAY),
+    DATE_ADD('2024-01-01 08:00:00', INTERVAL MOD(sn.n * 11 + pm.position_index, 300) DAY),
+    'installed',
+    0,
+    FALSE
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(sn.n + 1, 4, '0'))
+CROSS JOIN tmp_scale_position_map pm
+JOIN ComponentModel cm
+  ON cm.model_code = CASE pm.position_code
+      WHEN 'left engine position' THEN CONCAT('ENG-', a.aircraft_model, '-S')
+      WHEN 'landing gear bay' THEN CONCAT('LDG-', a.aircraft_model, '-S')
+      WHEN 'avionics bay' THEN CONCAT('AVI-', a.aircraft_model, '-S')
+      WHEN 'navigation bay' THEN 'NAV-UNIV-S'
+      WHEN 'hydraulic system bay' THEN 'HYD-UNIV-S'
+      WHEN 'fuel control bay' THEN 'FUEL-UNIV-S'
+      WHEN 'air conditioning bay' THEN 'ECS-UNIV-S'
+      WHEN 'brake assembly' THEN CONCAT('BRK-', a.aircraft_model, '-S')
+      WHEN 'battery bay' THEN 'BAT-UNIV-S'
+  END
+WHERE sn.n < 1000;
+
+-- 5,000 个可追溯的历史部件：1,000 个已退役、1,000 个正在维修、3,000 个维修后可用。
+INSERT INTO Component (
+    component_no, model_id, batch_no, production_date, stock_in_time,
+    status, total_flight_hours, is_retired
+)
+SELECT
+    CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-', pm.component_tag),
+    cm.model_id,
+    CONCAT('B-H-', DATE_FORMAT(DATE_ADD('2020-01-01', INTERVAL MOD(sn.n * 19, 900) DAY), '%Y%m')),
+    DATE_ADD('2020-01-01', INTERVAL MOD(sn.n * 19, 900) DAY),
+    DATE_ADD('2023-01-01 08:00:00', INTERVAL MOD(sn.n * 5, 300) DAY),
+    CASE
+        WHEN sn.n < 1000 THEN 'retired'
+        WHEN sn.n < 2000 THEN 'under_maintenance'
+        ELSE 'available'
+    END,
+    CASE
+        WHEN sn.n < 1000 THEN 4500 + MOD(sn.n, 1200)
+        ELSE 800 + MOD(sn.n, 900)
+    END,
+    CASE WHEN sn.n < 1000 THEN TRUE ELSE FALSE END
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'))
+JOIN tmp_scale_position_map pm
+  ON pm.position_index = MOD(sn.n, 9)
+JOIN ComponentModel cm
+  ON cm.model_code = CASE pm.position_code
+      WHEN 'left engine position' THEN CONCAT('ENG-', a.aircraft_model, '-S')
+      WHEN 'landing gear bay' THEN CONCAT('LDG-', a.aircraft_model, '-S')
+      WHEN 'avionics bay' THEN CONCAT('AVI-', a.aircraft_model, '-S')
+      WHEN 'navigation bay' THEN 'NAV-UNIV-S'
+      WHEN 'hydraulic system bay' THEN 'HYD-UNIV-S'
+      WHEN 'fuel control bay' THEN 'FUEL-UNIV-S'
+      WHEN 'air conditioning bay' THEN 'ECS-UNIV-S'
+      WHEN 'brake assembly' THEN CONCAT('BRK-', a.aircraft_model, '-S')
+      WHEN 'battery bay' THEN 'BAT-UNIV-S'
+  END
+WHERE sn.n < 5000;
+
+-- 2,000 个备件库存：1,000 个已检验可用，1,000 个待装机库存。
+INSERT INTO Component (
+    component_no, model_id, batch_no, production_date, stock_in_time,
+    status, total_flight_hours, is_retired
+)
+SELECT
+    CONCAT('CMP-S-', LPAD(sn.n + 1, 5, '0')),
+    cm.model_id,
+    CONCAT('B-S-', DATE_FORMAT(DATE_ADD('2022-01-01', INTERVAL MOD(sn.n * 23, 700) DAY), '%Y%m')),
+    DATE_ADD('2022-01-01', INTERVAL MOD(sn.n * 23, 700) DAY),
+    DATE_ADD('2024-01-01 08:00:00', INTERVAL MOD(sn.n * 3, 300) DAY),
+    CASE WHEN sn.n < 1000 THEN 'available' ELSE 'in_stock' END,
+    0,
+    FALSE
+FROM tmp_scale_numbers sn
+JOIN tmp_scale_model_map sm
+  ON sm.model_index = MOD(sn.n, 17)
+JOIN ComponentModel cm
+  ON cm.model_code = sm.model_code
+WHERE sn.n < 2000;
+
+-- 5,000 条已关闭安装记录：历史部件在 2024 年装机并完成计划性更换。
+INSERT INTO InstallationRecord (
+    component_id, aircraft_id, position_id, install_position, install_time, uninstall_time,
+    install_reason, uninstall_reason, operator_id, uninstall_operator_id
+)
+SELECT
+    c.component_id,
+    a.aircraft_id,
+    p.position_id,
+    pm.position_code,
+    DATE_ADD('2024-01-01 08:00:00', INTERVAL MOD(sn.n * 3, 180) DAY),
+    DATE_ADD('2024-01-01 08:00:00', INTERVAL (120 + MOD(sn.n * 3, 180)) DAY),
+    'historical fleet configuration',
+    CASE
+        WHEN sn.n < 1000 THEN 'removed after defect assessment'
+        WHEN sn.n < 2000 THEN 'removed for workshop maintenance'
+        ELSE 'scheduled replacement during fleet rotation'
+    END,
+    CASE MOD(sn.n, 3) WHEN 0 THEN 1 WHEN 1 THEN 5 ELSE 9 END,
+    CASE MOD(sn.n + 1, 3) WHEN 0 THEN 1 WHEN 1 THEN 5 ELSE 9 END
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'))
+JOIN tmp_scale_position_map pm
+  ON pm.position_index = MOD(sn.n, 9)
+JOIN AircraftInstallPosition p
+  ON p.aircraft_id = a.aircraft_id
+ AND p.position_code = pm.position_code
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-', pm.component_tag)
+WHERE sn.n < 5000;
+
+-- 9,000 条当前有效安装记录：每架新飞机在首个飞行周期前配置完整。
+INSERT INTO InstallationRecord (
+    component_id, aircraft_id, position_id, install_position, install_time,
+    install_reason, operator_id
+)
+SELECT
+    c.component_id,
+    a.aircraft_id,
+    p.position_id,
+    pm.position_code,
+    DATE_ADD('2025-01-01 08:00:00', INTERVAL MOD(sn.n * 7 + pm.position_index, 20) DAY),
+    'scale dataset baseline configuration',
+    CASE MOD(sn.n, 3) WHEN 0 THEN 1 WHEN 1 THEN 5 ELSE 9 END
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(sn.n + 1, 4, '0'))
+CROSS JOIN tmp_scale_position_map pm
+JOIN AircraftInstallPosition p
+  ON p.aircraft_id = a.aircraft_id
+ AND p.position_code = pm.position_code
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-C-', LPAD(sn.n + 1, 4, '0'), '-', pm.component_tag)
+WHERE sn.n < 1000;
+
+-- 55,000 条飞行日志：每架扩展飞机 55 次无重叠的常规任务。
+-- 所有飞行均发生在 2025 年，晚于当前部件安装时间，且低于扩展型号的维修周期。
+INSERT INTO FlightLog (
+    aircraft_id, mission_no, takeoff_time, landing_time,
+    flight_hours, mission_type, recorded_by
+)
+SELECT
+    a.aircraft_id,
+    CONCAT('SIM-F', LPAD(sn.n + 1, 6, '0')),
+    DATE_ADD(
+        '2025-02-01 06:00:00',
+        INTERVAL (MOD(sn.n, 55) * 3 + MOD(FLOOR(sn.n / 55), 7)) DAY
+    ),
+    DATE_ADD(
+        DATE_ADD(
+            '2025-02-01 06:00:00',
+            INTERVAL (MOD(sn.n, 55) * 3 + MOD(FLOOR(sn.n / 55), 7)) DAY
+        ),
+        INTERVAL (90 + MOD(sn.n, 5) * 15) MINUTE
+    ),
+    ROUND((90 + MOD(sn.n, 5) * 15) / 60, 2),
+    CASE MOD(sn.n, 4)
+        WHEN 0 THEN 'domestic rotation'
+        WHEN 1 THEN 'regional rotation'
+        WHEN 2 THEN 'cargo rotation'
+        ELSE 'training rotation'
+    END,
+    CASE MOD(sn.n, 2) WHEN 0 THEN 4 ELSE 10 END
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(FLOOR(sn.n / 55) + 1, 4, '0'))
+WHERE sn.n < 55000;
+
+-- 3,000 条已通过维修记录：历史部件完成车间检修后转为可用。
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time, result, description, technician_id
+)
+SELECT
+    c.component_id,
+    'scheduled overhaul',
+    DATE_ADD('2024-12-01 08:00:00', INTERVAL MOD(sn.n, 30) DAY),
+    DATE_ADD(DATE_ADD('2024-12-01 08:00:00', INTERVAL MOD(sn.n, 30) DAY), INTERVAL 8 HOUR),
+    'passed',
+    'Historical component restored to available stock after scheduled overhaul.',
+    CASE MOD(sn.n, 3) WHEN 0 THEN 2 WHEN 1 THEN 6 ELSE 8 END
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-',
+        CASE MOD(sn.n, 9)
+            WHEN 0 THEN 'ENG' WHEN 1 THEN 'LDG' WHEN 2 THEN 'AVI'
+            WHEN 3 THEN 'NAV' WHEN 4 THEN 'HYD' WHEN 5 THEN 'FUEL'
+            WHEN 6 THEN 'ECS' WHEN 7 THEN 'BRK' ELSE 'BAT'
+        END)
+WHERE sn.n BETWEEN 2000 AND 4999;
+
+-- 1,000 条报废维修记录：与对应退役部件及退役记录形成完整链条。
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time, result, description, technician_id
+)
+SELECT
+    c.component_id,
+    'defect assessment',
+    DATE_ADD('2024-12-01 08:00:00', INTERVAL MOD(sn.n, 40) DAY),
+    DATE_ADD(DATE_ADD('2024-12-01 08:00:00', INTERVAL MOD(sn.n, 40) DAY), INTERVAL 6 HOUR),
+    'scrapped',
+    'Irreparable defect confirmed during workshop assessment.',
+    CASE MOD(sn.n, 3) WHEN 0 THEN 2 WHEN 1 THEN 6 ELSE 8 END
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-',
+        CASE MOD(sn.n, 9)
+            WHEN 0 THEN 'ENG' WHEN 1 THEN 'LDG' WHEN 2 THEN 'AVI'
+            WHEN 3 THEN 'NAV' WHEN 4 THEN 'HYD' WHEN 5 THEN 'FUEL'
+            WHEN 6 THEN 'ECS' WHEN 7 THEN 'BRK' ELSE 'BAT'
+        END)
+WHERE sn.n < 1000;
+
+-- 1,000 条进行中维修记录：对应当前 under_maintenance 状态的历史部件。
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time, result, description, technician_id
+)
+SELECT
+    c.component_id,
+    'workshop repair',
+    DATE_ADD('2025-01-15 08:00:00', INTERVAL MOD(sn.n, 60) DAY),
+    NULL,
+    'pending',
+    'Component is currently undergoing workshop repair.',
+    CASE MOD(sn.n, 3) WHEN 0 THEN 2 WHEN 1 THEN 6 ELSE 8 END
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-',
+        CASE MOD(sn.n, 9)
+            WHEN 0 THEN 'ENG' WHEN 1 THEN 'LDG' WHEN 2 THEN 'AVI'
+            WHEN 3 THEN 'NAV' WHEN 4 THEN 'HYD' WHEN 5 THEN 'FUEL'
+            WHEN 6 THEN 'ECS' WHEN 7 THEN 'BRK' ELSE 'BAT'
+        END)
+WHERE sn.n BETWEEN 1000 AND 1999;
+
+-- 1,000 条入库检验记录：已检验的备件状态为 available。
+INSERT INTO MaintenanceRecord (
+    component_id, maintenance_type, start_time, end_time, result, description, technician_id
+)
+SELECT
+    c.component_id,
+    'incoming inspection',
+    DATE_ADD('2025-01-10 08:00:00', INTERVAL MOD(sn.n, 90) DAY),
+    DATE_ADD(DATE_ADD('2025-01-10 08:00:00', INTERVAL MOD(sn.n, 90) DAY), INTERVAL 4 HOUR),
+    'passed',
+    'Incoming stock acceptance inspection completed successfully.',
+    CASE MOD(sn.n, 3) WHEN 0 THEN 2 WHEN 1 THEN 6 ELSE 8 END
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-S-', LPAD(sn.n + 1, 5, '0'))
+WHERE sn.n < 1000;
+
+-- 500 条已完成维修计划：关联到已通过的历史维修记录。
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status,
+    created_by, created_at, completed_at, related_maintenance_id
+)
+SELECT
+    c.component_id,
+    'post_removal_inspection',
+    DATE_SUB(mr.start_time, INTERVAL 3 DAY),
+    'Planned inspection after removal from fleet rotation.',
+    'completed',
+    CASE MOD(sn.n, 2) WHEN 0 THEN 3 ELSE 7 END,
+    DATE_SUB(mr.start_time, INTERVAL 3 DAY),
+    mr.end_time,
+    mr.maintenance_id
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-',
+        CASE MOD(sn.n, 9)
+            WHEN 0 THEN 'ENG' WHEN 1 THEN 'LDG' WHEN 2 THEN 'AVI'
+            WHEN 3 THEN 'NAV' WHEN 4 THEN 'HYD' WHEN 5 THEN 'FUEL'
+            WHEN 6 THEN 'ECS' WHEN 7 THEN 'BRK' ELSE 'BAT'
+        END)
+JOIN MaintenanceRecord mr
+  ON mr.component_id = c.component_id
+ AND mr.result = 'passed'
+ AND mr.maintenance_type = 'scheduled overhaul'
+WHERE sn.n BETWEEN 2000 AND 2499;
+
+-- 500 条已开始但尚未完成的维修计划：关联 pending 的维修记录。
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status,
+    created_by, created_at, completed_at, related_maintenance_id
+)
+SELECT
+    c.component_id,
+    'corrective maintenance',
+    DATE_SUB(mr.start_time, INTERVAL 7 DAY),
+    'Corrective maintenance plan started after workshop diagnosis.',
+    'pending',
+    CASE MOD(sn.n, 2) WHEN 0 THEN 3 ELSE 7 END,
+    DATE_SUB(mr.start_time, INTERVAL 7 DAY),
+    NULL,
+    mr.maintenance_id
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-',
+        CASE MOD(sn.n, 9)
+            WHEN 0 THEN 'ENG' WHEN 1 THEN 'LDG' WHEN 2 THEN 'AVI'
+            WHEN 3 THEN 'NAV' WHEN 4 THEN 'HYD' WHEN 5 THEN 'FUEL'
+            WHEN 6 THEN 'ECS' WHEN 7 THEN 'BRK' ELSE 'BAT'
+        END)
+JOIN MaintenanceRecord mr
+  ON mr.component_id = c.component_id
+ AND mr.result = 'pending'
+WHERE sn.n BETWEEN 1000 AND 1499;
+
+-- 500 条尚未开始的周期检查计划：绑定到仍在飞行的当前部件。
+INSERT INTO MaintenancePlan (
+    component_id, planned_type, planned_time, planned_reason, status,
+    created_by, created_at, completed_at, related_maintenance_id
+)
+SELECT
+    c.component_id,
+    'scheduled inspection',
+    DATE_ADD('2025-12-01 09:00:00', INTERVAL MOD(sn.n, 180) DAY),
+    'Next scheduled inspection for active fleet scale dataset.',
+    'pending',
+    CASE MOD(sn.n, 2) WHEN 0 THEN 3 ELSE 7 END,
+    DATE_SUB(DATE_ADD('2025-12-01 09:00:00', INTERVAL MOD(sn.n, 180) DAY), INTERVAL 30 DAY),
+    NULL,
+    NULL
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-C-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-',
+        CASE MOD(sn.n, 9)
+            WHEN 0 THEN 'ENG' WHEN 1 THEN 'LDG' WHEN 2 THEN 'AVI'
+            WHEN 3 THEN 'NAV' WHEN 4 THEN 'HYD' WHEN 5 THEN 'FUEL'
+            WHEN 6 THEN 'ECS' WHEN 7 THEN 'BRK' ELSE 'BAT'
+        END)
+WHERE sn.n < 500;
+
+-- 1,000 条退役记录：与 scrapped 维修结果及 retired 状态一一对应。
+INSERT INTO RetirementRecord (
+    component_id, retirement_time, retirement_reason, approved_by, remark
+)
+SELECT
+    c.component_id,
+    DATE_ADD('2025-01-10 10:00:00', INTERVAL MOD(sn.n, 30) DAY),
+    CASE MOD(sn.n, 3)
+        WHEN 0 THEN 'irreparable damage'
+        WHEN 1 THEN 'failed defect assessment'
+        ELSE 'economic retirement after workshop evaluation'
+    END,
+    CASE MOD(sn.n, 2) WHEN 0 THEN 3 ELSE 7 END,
+    'Retired from the scale dataset after a completed scrapped maintenance assessment.'
+FROM tmp_scale_numbers sn
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-H-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-',
+        CASE MOD(sn.n, 9)
+            WHEN 0 THEN 'ENG' WHEN 1 THEN 'LDG' WHEN 2 THEN 'AVI'
+            WHEN 3 THEN 'NAV' WHEN 4 THEN 'HYD' WHEN 5 THEN 'FUEL'
+            WHEN 6 THEN 'ECS' WHEN 7 THEN 'BRK' ELSE 'BAT'
+        END)
+WHERE sn.n < 1000;
+
+-- 1,500 条关联审计日志：覆盖飞机建档、配置导入和飞行归档三类真实动作。
+INSERT INTO AuditLog (
+    operator_id, operation_type, target_table, target_id, operation_time, operation_detail
+)
+SELECT
+    4,
+    'aircraft_registration',
+    'Aircraft',
+    a.aircraft_id,
+    DATE_ADD('2024-01-01 08:00:00', INTERVAL MOD(sn.n, 300) DAY),
+    CONCAT('Registered scale dataset aircraft ', a.aircraft_no, '.')
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(sn.n + 1, 4, '0'))
+WHERE sn.n < 500;
+
+INSERT INTO AuditLog (
+    operator_id, operation_type, target_table, target_id, operation_time, operation_detail
+)
+SELECT
+    CASE MOD(sn.n, 2) WHEN 0 THEN 1 ELSE 5 END,
+    'baseline_installation',
+    'InstallationRecord',
+    ir.installation_id,
+    ir.install_time,
+    CONCAT('Scale dataset baseline configuration imported for ', c.component_no, ' on ', a.aircraft_no, '.')
+FROM tmp_scale_numbers sn
+JOIN Aircraft a
+  ON a.aircraft_no = CONCAT('AC-S', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'))
+JOIN tmp_scale_position_map pm
+  ON pm.position_index = MOD(sn.n, 9)
+JOIN Component c
+  ON c.component_no = CONCAT('CMP-C-', LPAD(FLOOR(sn.n / 9) + 1, 4, '0'), '-', pm.component_tag)
+JOIN InstallationRecord ir
+  ON ir.component_id = c.component_id
+ AND ir.aircraft_id = a.aircraft_id
+ AND ir.uninstall_time IS NULL
+WHERE sn.n < 500;
+
+INSERT INTO AuditLog (
+    operator_id, operation_type, target_table, target_id, operation_time, operation_detail
+)
+SELECT
+    fl.recorded_by,
+    'flight_recorded',
+    'FlightLog',
+    fl.flight_id,
+    fl.landing_time,
+    CONCAT('Archived completed flight ', fl.mission_no, ' for scale dataset.')
+FROM tmp_scale_numbers sn
+JOIN FlightLog fl
+  ON fl.mission_no = CONCAT('SIM-F', LPAD(sn.n + 1, 6, '0'))
+WHERE sn.n < 500;
+
+DROP TEMPORARY TABLE tmp_scale_model_map;
+DROP TEMPORARY TABLE tmp_scale_position_map;
+DROP TEMPORARY TABLE tmp_scale_numbers;
+
+-- 扩展部分的预期新增行数：105,017 行。
+-- 全库总行数会在原有演示数据基础上超过 105,000 行。
+SELECT
+    (SELECT COUNT(*) FROM Aircraft WHERE aircraft_no LIKE 'AC-S%') AS new_aircraft,
+    (SELECT COUNT(*) FROM AircraftInstallPosition p JOIN Aircraft a ON a.aircraft_id = p.aircraft_id WHERE a.aircraft_no LIKE 'AC-S%') AS new_positions,
+    (SELECT COUNT(*) FROM Component WHERE component_no LIKE 'CMP-C-%') AS new_current_components,
+    (SELECT COUNT(*) FROM Component WHERE component_no LIKE 'CMP-H-%') AS new_historical_components,
+    (SELECT COUNT(*) FROM Component WHERE component_no LIKE 'CMP-S-%') AS new_spare_components,
+    (SELECT COUNT(*) FROM InstallationRecord ir JOIN Aircraft a ON a.aircraft_id = ir.aircraft_id WHERE a.aircraft_no LIKE 'AC-S%') AS new_installation_records,
+    (SELECT COUNT(*) FROM FlightLog WHERE mission_no LIKE 'SIM-F%') AS new_flight_logs,
+    (SELECT COUNT(*) FROM MaintenanceRecord mr JOIN Component c ON c.component_id = mr.component_id WHERE c.component_no LIKE 'CMP-%') AS new_maintenance_records,
+    (SELECT COUNT(*) FROM MaintenancePlan mp JOIN Component c ON c.component_id = mp.component_id WHERE c.component_no LIKE 'CMP-%') AS new_maintenance_plans,
+    (SELECT COUNT(*) FROM RetirementRecord rr JOIN Component c ON c.component_id = rr.component_id WHERE c.component_no LIKE 'CMP-H-%') AS new_retirement_records,
+    (SELECT COUNT(*) FROM AuditLog WHERE operation_detail LIKE '%scale dataset%') AS new_audit_logs;
+
+
+-- 扩展数据一致性核验：下列 *_errors 字段都应为 0。
+SELECT
+    (SELECT COUNT(*)
+     FROM Component c
+     LEFT JOIN InstallationRecord ir
+       ON ir.component_id = c.component_id AND ir.uninstall_time IS NULL
+     WHERE c.component_no LIKE 'CMP-C-%' AND ir.installation_id IS NULL) AS current_components_without_active_install_errors,
+    (SELECT COUNT(*)
+     FROM AircraftInstallPosition p
+     JOIN Aircraft a ON a.aircraft_id = p.aircraft_id
+     LEFT JOIN InstallationRecord ir
+       ON ir.position_id = p.position_id AND ir.uninstall_time IS NULL
+     WHERE a.aircraft_no LIKE 'AC-S%' AND p.is_active = TRUE AND ir.installation_id IS NULL) AS active_positions_without_component_errors,
+    (SELECT COUNT(*)
+     FROM InstallationRecord ir
+     JOIN Aircraft a ON a.aircraft_id = ir.aircraft_id
+     WHERE a.aircraft_no LIKE 'AC-S%'
+       AND ir.uninstall_time IS NOT NULL
+       AND ir.uninstall_time < ir.install_time) AS installation_time_order_errors,
+    (SELECT COUNT(*)
+     FROM FlightLog fl
+     WHERE fl.mission_no LIKE 'SIM-F%'
+       AND (fl.landing_time <= fl.takeoff_time OR fl.flight_hours <= 0)) AS flight_time_or_duration_errors,
+    (SELECT COUNT(*)
+     FROM Component c
+     LEFT JOIN MaintenanceRecord mr
+       ON mr.component_id = c.component_id AND mr.result = 'pending'
+     WHERE c.component_no LIKE 'CMP-H-%'
+       AND c.status = 'under_maintenance'
+       AND mr.maintenance_id IS NULL) AS maintenance_status_link_errors,
+    (SELECT COUNT(*)
+     FROM Component c
+     LEFT JOIN RetirementRecord rr ON rr.component_id = c.component_id
+     WHERE c.component_no LIKE 'CMP-H-%'
+       AND c.status = 'retired'
+       AND rr.retirement_id IS NULL) AS retirement_status_link_errors;
 
 -- 初始化后计数与一致性快速检查。
 SELECT 'Operator' AS table_name, COUNT(*) AS row_count FROM Operator
